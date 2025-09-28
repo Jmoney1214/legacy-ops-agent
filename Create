@@ -1,0 +1,17 @@
+from agents import Agent, run, function_tool
+
+@function_tool
+def ping(target: str) -> str:
+    """Quick connectivity check to a named target (no network, just demo)."""
+    return f"pong:{target}"
+
+agent = Agent(
+    name="LegacyOps",
+    instructions="Be concise. Use tools precisely. Return final answers.",
+    tools=[ping],  # add more tools later
+    # model omitted → uses default configured model
+)
+
+if __name__ == "__main__":
+    result = run(agent, "Ping warehouse")
+    print(result.final_output)

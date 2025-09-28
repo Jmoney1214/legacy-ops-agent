@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: legacy-ops-agent
+    env: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LS_ACCOUNT_ID
+        sync: false
+      - key: LS_SHOP_ID
+        sync: false
+      - key: LS_CLIENT_ID
+        sync: false
+      - key: LS_CLIENT_SECRET
+        sync: false
+      - key: LS_REDIRECT_URI
+        sync: false
+      - key: LS_REFRESH_TOKEN
+        sync: false
