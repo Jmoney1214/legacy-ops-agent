@@ -1,2 +1,6 @@
 .env
 .env
+.env
+tokens.json
+oauth_code.txt
+oauth_state.txt
