@@ -1,6 +1,18 @@
 .env
-.env
-.env
+.env.*
+!.env.example
+
 tokens.json
 oauth_code.txt
 oauth_state.txt
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local operational state must never enter Git.
+data/*.db
+data/*.db-shm
+data/*.db-wal
