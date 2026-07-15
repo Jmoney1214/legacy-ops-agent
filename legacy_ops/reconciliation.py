@@ -5,7 +5,7 @@ import io
 import json
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from enum import StrEnum
 from typing import Any, Iterable, Mapping, Sequence
@@ -71,9 +71,7 @@ def money(value: Any, *, default: Decimal | None = None) -> Decimal:
     return (-result if negative else result).quantize(CENT, rounding=ROUND_HALF_UP)
 
 
-def parse_datetime(
-    value: Any, *, default_timezone: str = "America/New_York"
-) -> datetime:
+def parse_datetime(value: Any, *, default_timezone: str = "America/New_York") -> datetime:
     if isinstance(value, datetime):
         result = value
     else:
@@ -85,16 +83,12 @@ def parse_datetime(
         try:
             result = datetime.fromisoformat(text)
         except ValueError as exc:
-            raise ReconciliationError(
-                f"Invalid datetime {value!r}; use ISO-8601"
-            ) from exc
+            raise ReconciliationError(f"Invalid datetime {value!r}; use ISO-8601") from exc
     if result.tzinfo is None:
         try:
             result = result.replace(tzinfo=ZoneInfo(default_timezone))
         except Exception as exc:
-            raise ReconciliationError(
-                f"Invalid timezone: {default_timezone}"
-            ) from exc
+            raise ReconciliationError(f"Invalid timezone: {default_timezone}") from exc
     return result.astimezone(timezone.utc)
 
 
@@ -191,11 +185,7 @@ class OrderMatch:
         result.update(
             status=self.status.value,
             platform_amount=str(self.platform_amount),
-            lightspeed_amount=(
-                str(self.lightspeed_amount)
-                if self.lightspeed_amount is not None
-                else None
-            ),
+            lightspeed_amount=(str(self.lightspeed_amount) if self.lightspeed_amount is not None else None),
             variance=str(self.variance),
         )
         return result
@@ -253,9 +243,7 @@ class ReconciliationResult:
     reported_payout: Decimal | None
     bank_deposit_amount: Decimal | None
     run_id: str = field(default_factory=lambda: str(uuid4()))
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def matched_order_count(self) -> int:
@@ -265,10 +253,7 @@ class ReconciliationResult:
     def order_match_rate(self) -> Decimal:
         if not self.input_platform_order_count:
             return Decimal("1.0000")
-        return (
-            Decimal(self.matched_order_count)
-            / Decimal(self.input_platform_order_count)
-        ).quantize(Decimal("0.0001"))
+        return (Decimal(self.matched_order_count) / Decimal(self.input_platform_order_count)).quantize(Decimal("0.0001"))
 
     @property
     def payout_variance(self) -> Decimal:
@@ -284,26 +269,19 @@ class ReconciliationResult:
 
     @property
     def unresolved_variance(self) -> Decimal:
-        ignored = {
+        excluded = {
             MatchStatus.PAYOUT_MISMATCH,
             MatchStatus.BANK_DEPOSIT_MISMATCH,
             MatchStatus.BANK_DEPOSIT_MISSING,
         }
         exception_exposure = sum(
-            (
-                abs(item.variance)
-                for item in self.exceptions
-                if item.exception_type not in ignored
-            ),
+            (abs(item.variance) for item in self.exceptions if item.exception_type not in excluded),
             Decimal("0"),
         )
         bank_missing = (
             self.reported_payout.copy_abs()
-            if self.reported_payout is not None
-            and any(
-                item.exception_type is MatchStatus.BANK_DEPOSIT_MISSING
-                for item in self.exceptions
-            )
+            if any(item.exception_type is MatchStatus.BANK_DEPOSIT_MISSING for item in self.exceptions)
+            and self.reported_payout is not None
             else Decimal("0")
         )
         return max(
@@ -324,16 +302,8 @@ class ReconciliationResult:
             "matched_order_count": self.matched_order_count,
             "order_match_rate": str(self.order_match_rate),
             "expected_payout": str(self.expected_payout),
-            "reported_payout": (
-                str(self.reported_payout)
-                if self.reported_payout is not None
-                else None
-            ),
-            "bank_deposit_amount": (
-                str(self.bank_deposit_amount)
-                if self.bank_deposit_amount is not None
-                else None
-            ),
+            "reported_payout": str(self.reported_payout) if self.reported_payout is not None else None,
+            "bank_deposit_amount": str(self.bank_deposit_amount) if self.bank_deposit_amount is not None else None,
             "payout_variance": str(self.payout_variance),
             "bank_variance": str(self.bank_variance),
             "unresolved_variance": str(self.unresolved_variance),
@@ -365,7 +335,6 @@ class ReconciliationEngine:
         start, end = parse_datetime(period_start), parse_datetime(period_end)
         if end <= start:
             raise ReconciliationError("period_end must be after period_start")
-
         raw_platform = [
             item
             for item in platform_orders
@@ -389,7 +358,6 @@ class ReconciliationEngine:
             else:
                 seen.add(key)
                 unique_platform.append(order)
-
         lightspeed = [
             item
             for item in lightspeed_sales
@@ -399,12 +367,9 @@ class ReconciliationEngine:
         by_external: dict[str, list[LightspeedSale]] = {}
         for sale in lightspeed:
             if sale.normalized_external_order_id:
-                by_external.setdefault(
-                    sale.normalized_external_order_id, []
-                ).append(sale)
+                by_external.setdefault(sale.normalized_external_order_id, []).append(sale)
         available = {item.transaction_id: item for item in lightspeed}
         matches: list[OrderMatch] = []
-
         for order in unique_platform:
             exact = [
                 item
@@ -412,9 +377,7 @@ class ReconciliationEngine:
                 if item.transaction_id in available
             ]
             if len(exact) > 1:
-                lightspeed_total = sum(
-                    (item.customer_total for item in exact), Decimal("0")
-                )
+                lightspeed_total = sum((item.customer_total for item in exact), Decimal("0"))
                 variance = lightspeed_total - order.customer_total
                 for item in exact:
                     available.pop(item.transaction_id, None)
@@ -439,18 +402,29 @@ class ReconciliationEngine:
                     )
                 )
                 continue
-
             candidate = exact[0] if exact else None
             method = "external_order_id" if candidate else "amount_time_location"
             if candidate is None:
                 candidates = self._fallback_candidates(order, available.values())
                 if len(candidates) > 1 and self._is_ambiguous(order, candidates):
+                    minimum_distance = abs(
+                        (candidates[0].sold_at - order.ordered_at).total_seconds()
+                    )
+                    ambiguous = [
+                        item
+                        for item in candidates
+                        if abs((item.sold_at - order.ordered_at).total_seconds())
+                        == minimum_distance
+                    ]
+                    for item in ambiguous:
+                        available.pop(item.transaction_id, None)
+                    candidate_ids = ", ".join(item.transaction_id for item in ambiguous)
                     exceptions.append(
                         self._exception(
                             marketplace,
                             MatchStatus.AMBIGUOUS_MATCH,
                             order.customer_total,
-                            f"Multiple fallback candidates for {order.order_id}; manual review required",
+                            f"Multiple fallback candidates for {order.order_id}: {candidate_ids}; manual review required",
                             platform_order_id=order.order_id,
                         )
                     )
@@ -467,7 +441,6 @@ class ReconciliationEngine:
                     )
                     continue
                 candidate = candidates[0] if candidates else None
-
             if candidate is None:
                 matches.append(
                     OrderMatch(
@@ -490,14 +463,9 @@ class ReconciliationEngine:
                     )
                 )
                 continue
-
             available.pop(candidate.transaction_id, None)
-            amount_variance = (
-                candidate.customer_total - order.customer_total
-            ).quantize(CENT)
-            refund_variance = (
-                abs(candidate.refunds) - abs(order.refunds)
-            ).quantize(CENT)
+            amount_variance = (candidate.customer_total - order.customer_total).quantize(CENT)
+            refund_variance = (abs(candidate.refunds) - abs(order.refunds)).quantize(CENT)
             status = MatchStatus.MATCHED
             variance = Decimal("0")
             if abs(amount_variance) > self.policy.amount_tolerance:
@@ -526,7 +494,6 @@ class ReconciliationEngine:
                         lightspeed_transaction_id=candidate.transaction_id,
                     )
                 )
-
         for sale in available.values():
             exceptions.append(
                 self._exception(
@@ -537,7 +504,6 @@ class ReconciliationEngine:
                     lightspeed_transaction_id=sale.transaction_id,
                 )
             )
-
         expected = sum(
             (item.expected_net_payout for item in unique_platform), Decimal("0")
         ).quantize(CENT)
@@ -549,11 +515,8 @@ class ReconciliationEngine:
                 parse_datetime(settlement.period_start) != start
                 or parse_datetime(settlement.period_end) != end
             ):
-                raise ReconciliationError(
-                    "Settlement period does not match audit period"
-                )
-            reported = settlement.reported_net_payout
-            bank = settlement.bank_deposit_amount
+                raise ReconciliationError("Settlement period does not match audit period")
+            reported, bank = settlement.reported_net_payout, settlement.bank_deposit_amount
             payout_variance = (reported - expected).quantize(CENT)
             if abs(payout_variance) > self.policy.payout_tolerance:
                 exceptions.append(
@@ -587,7 +550,6 @@ class ReconciliationEngine:
                             payout_id=settlement.payout_id,
                         )
                     )
-
         return ReconciliationResult(
             marketplace,
             start,
@@ -652,23 +614,12 @@ _ALIASES = {
     "order_id": ("order id", "platform order id", "delivery id"),
     "ordered_at": ("order date", "ordered at", "date", "time"),
     "location": ("store", "store name", "location", "shop name"),
-    "customer_total": (
-        "order total",
-        "customer total",
-        "gross sales",
-        "grand total",
-    ),
+    "customer_total": ("order total", "customer total", "gross sales", "grand total"),
     "subtotal": ("subtotal", "merchandise subtotal", "item subtotal"),
     "tax": ("tax", "merchant tax", "tax to merchant"),
     "tips": ("tip", "tips"),
-    "platform_promo": (
-        "platform promotion",
-        "platform funded promotion",
-    ),
-    "merchant_promo": (
-        "merchant promotion",
-        "merchant funded promotion",
-    ),
+    "platform_promo": ("platform promotion", "platform funded promotion"),
+    "merchant_promo": ("merchant promotion", "merchant funded promotion"),
     "commission": ("commission", "commission fee"),
     "fees": ("fees", "other fees", "marketplace fees"),
     "refunds": ("refund", "refunds"),
@@ -676,21 +627,14 @@ _ALIASES = {
     "adjustments": ("adjustment", "adjustments"),
     "payout_id": ("payout id", "settlement id"),
     "transaction_id": ("sale id", "transaction id", "receipt id"),
-    "external_order_id": (
-        "external id",
-        "external order id",
-        "online order id",
-    ),
+    "external_order_id": ("external id", "external order id", "online order id"),
     "sold_at": ("sale date", "sold at", "completed at"),
     "payment_type": ("payment type", "payment", "tender"),
 }
 
 
 def read_csv_rows(content: str) -> list[dict[str, str]]:
-    return [
-        dict(row)
-        for row in csv.DictReader(io.StringIO(content.lstrip("\ufeff")))
-    ]
+    return [dict(row) for row in csv.DictReader(io.StringIO(content.lstrip("\ufeff")))]
 
 
 def _canonical(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -700,9 +644,7 @@ def _canonical(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _field(
-    row: Mapping[str, Any], name: str, *, required: bool = False
-) -> Any:
+def _field(row: Mapping[str, Any], name: str, *, required: bool = False) -> Any:
     canonical = _canonical(row)
     for alias in _ALIASES[name]:
         if alias in canonical and canonical[alias] not in {None, ""}:
@@ -721,7 +663,7 @@ def parse_platform_rows(
     output: list[PlatformOrder] = []
     for row_number, row in enumerate(rows, start=2):
         try:
-            payout_value = _field(row, "payout_id")
+            payout_id = _field(row, "payout_id")
             output.append(
                 PlatformOrder(
                     marketplace,
@@ -742,13 +684,11 @@ def parse_platform_rows(
                     money(_field(row, "refunds"), default=Decimal("0")),
                     money(_field(row, "chargebacks"), default=Decimal("0")),
                     money(_field(row, "adjustments"), default=Decimal("0")),
-                    str(payout_value) if payout_value is not None else None,
+                    str(payout_id) if payout_id is not None else None,
                 )
             )
         except ReconciliationError as exc:
-            raise ReconciliationError(
-                f"Platform CSV row {row_number}: {exc}"
-            ) from exc
+            raise ReconciliationError(f"Platform CSV row {row_number}: {exc}") from exc
     return output
 
 
@@ -760,7 +700,7 @@ def parse_lightspeed_rows(
     output: list[LightspeedSale] = []
     for row_number, row in enumerate(rows, start=2):
         try:
-            external_value = _field(row, "external_order_id")
+            external_order_id = _field(row, "external_order_id")
             output.append(
                 LightspeedSale(
                     str(_field(row, "transaction_id", required=True)),
@@ -771,14 +711,12 @@ def parse_lightspeed_rows(
                     str(_field(row, "location", required=True)),
                     money(_field(row, "customer_total", required=True)),
                     str(_field(row, "payment_type", required=True)),
-                    str(external_value) if external_value is not None else None,
+                    str(external_order_id) if external_order_id is not None else None,
                     money(_field(row, "refunds"), default=Decimal("0")),
                 )
             )
         except ReconciliationError as exc:
-            raise ReconciliationError(
-                f"Lightspeed CSV row {row_number}: {exc}"
-            ) from exc
+            raise ReconciliationError(f"Lightspeed CSV row {row_number}: {exc}") from exc
     return output
 
 
@@ -786,7 +724,7 @@ def build_weekly_report(result: ReconciliationResult) -> str:
     lines = [
         f"# {result.marketplace.value.replace('_', ' ').title()} Reconciliation",
         "",
-        f"Period: {result.period_start.date()} through {result.period_end.date()}",
+        f"Period: {result.period_start.date()} through {(result.period_end - timedelta(days=1)).date()}",
         f"Platform orders: {result.input_platform_order_count}",
         f"Matched orders: {result.matched_order_count}",
         f"Order match rate: {(result.order_match_rate * 100):.2f}%",
@@ -899,11 +837,7 @@ class ReconciliationRepository:
                         "exception_count": len(result.exceptions),
                         "unresolved_variance": str(result.unresolved_variance),
                     },
-                    (
-                        AuditSeverity.HIGH
-                        if result.exceptions
-                        else AuditSeverity.INFO
-                    ),
+                    AuditSeverity.HIGH if result.exceptions else AuditSeverity.INFO,
                 ),
             )
 
@@ -918,10 +852,7 @@ class ReconciliationRepository:
     def list_exceptions(self, run_id: str) -> list[dict[str, Any]]:
         with self.store.connection() as connection:
             rows = connection.execute(
-                """
-                SELECT payload_json FROM reconciliation_exceptions
-                WHERE run_id = ? ORDER BY id
-                """,
+                "SELECT payload_json FROM reconciliation_exceptions WHERE run_id = ? ORDER BY id",
                 (run_id,),
             ).fetchall()
         return [json.loads(row["payload_json"]) for row in rows]
