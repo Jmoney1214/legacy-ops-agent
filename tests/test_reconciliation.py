@@ -122,6 +122,11 @@ class ReconciliationTests(unittest.TestCase):
             ],
         )
         self.assertEqual(result.matches[0].status, MatchStatus.AMBIGUOUS_MATCH)
+        self.assertEqual(len(result.exceptions), 1)
+        self.assertNotIn(
+            MatchStatus.MISSING_IN_PLATFORM,
+            {item.exception_type for item in result.exceptions},
+        )
 
     def test_duplicate_platform_excluded_from_payout(self):
         result = ReconciliationEngine().run(
@@ -192,7 +197,9 @@ class ReconciliationTests(unittest.TestCase):
             platform_orders=[platform()],
             lightspeed_sales=[sale()],
         )
-        self.assertIn("Order match rate: 100.00%", build_weekly_report(result))
+        report = build_weekly_report(result)
+        self.assertIn("Order match rate: 100.00%", report)
+        self.assertIn("2026-07-06 through 2026-07-12", report)
 
 
 if __name__ == "__main__":
