@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from inspect import isawaitable
 from typing import Awaitable, Callable, Sequence
 
 from .chargebacks import (
@@ -42,6 +43,11 @@ class ChargebackScanResult:
 class ChargebackPipeline:
     """Orchestrates Gmail intake, Lightspeed lookup, and approval preparation.
 
+    This production entry point intentionally requires the strict Lightspeed
+    adapter and atomic workflow from `legacy_ops.chargeback_integrity`. The
+    intake path cannot silently fall back to fail-open timestamp handling,
+    amount-conflicting exact matches, or non-atomic submission finalization.
+
     The pipeline does not submit a dispute form. Browser submission remains a
     separate approval-gated executor so the read/prepare path cannot acquire an
     accidental financial side effect.
@@ -55,6 +61,14 @@ class ChargebackPipeline:
         workflow: ChargebackWorkflow,
         evidence_resolver: EvidenceResolver,
     ):
+        if not getattr(workflow, "atomic_submission", False):
+            raise ChargebackError(
+                "ChargebackPipeline requires AtomicChargebackWorkflow"
+            )
+        if not getattr(lightspeed, "strict_matching", False):
+            raise ChargebackError(
+                "ChargebackPipeline requires StrictLightspeedChargebackSaleClient"
+            )
         self.gmail = gmail
         self.lightspeed = lightspeed
         self.workflow = workflow
@@ -66,9 +80,9 @@ class ChargebackPipeline:
         sales: Sequence,
     ) -> Sequence[EvidenceDocument]:
         value = self.evidence_resolver(email, sales)
-        if hasattr(value, "__await__"):
-            return await value  # type: ignore[misc]
-        return value  # type: ignore[return-value]
+        if isawaitable(value):
+            return await value
+        return value
 
     async def scan_and_prepare(
         self,
