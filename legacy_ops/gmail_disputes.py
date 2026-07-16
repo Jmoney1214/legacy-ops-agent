@@ -12,13 +12,58 @@ from .chargebacks import (
     ChargebackError,
     EmailAttachment,
     EmailMessage,
-    build_gmail_dispute_query,
     decode_gmail_message,
 )
 
 
 _SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._ -]+")
+_SAFE_SENDER = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+$"
+)
 _MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+
+def build_dispute_search_query(
+    *,
+    lookback_days: int = 60,
+    senders: Sequence[str] = (),
+) -> str:
+    """Build a Gmail query with OR semantics for multiple processor senders."""
+    if lookback_days < 1 or lookback_days > 3650:
+        raise ChargebackError("lookback_days must be between 1 and 3650")
+
+    normalized_senders: list[str] = []
+    for sender in senders:
+        value = sender.strip().lower()
+        if not value:
+            continue
+        if not _SAFE_SENDER.fullmatch(value):
+            raise ChargebackError(f"Invalid Gmail sender filter: {sender!r}")
+        if value not in normalized_senders:
+            normalized_senders.append(value)
+
+    sender_clause = ""
+    if len(normalized_senders) == 1:
+        sender_clause = f"from:{normalized_senders[0]}"
+    elif normalized_senders:
+        sender_clause = "{" + " ".join(
+            f"from:{sender}" for sender in normalized_senders
+        ) + "}"
+
+    signals = (
+        '{subject:chargeback subject:dispute "reason for challenge" '
+        '"customer\'s bank" "respond by"}'
+    )
+    return " ".join(
+        part
+        for part in (
+            f"newer_than:{lookback_days}d",
+            sender_clause,
+            signals,
+            "-in:trash",
+        )
+        if part
+    )
 
 
 class GmailDisputeClient:
@@ -120,7 +165,7 @@ class GmailDisputeClient:
         senders: Sequence[str] = (),
         max_results: int = 100,
     ) -> list[EmailMessage]:
-        query = build_gmail_dispute_query(
+        query = build_dispute_search_query(
             lookback_days=lookback_days,
             senders=senders,
         )
@@ -145,8 +190,9 @@ class GmailDisputeClient:
         directory = Path(destination_directory)
         directory.mkdir(parents=True, exist_ok=True)
         filename = _SAFE_FILENAME.sub("_", Path(attachment.filename).name).strip()
-        if not filename:
-            raise ChargebackError("Attachment filename is invalid")
+        safe_message_id = _SAFE_FILENAME.sub("_", message_id).strip(" .")
+        if not filename or not safe_message_id:
+            raise ChargebackError("Attachment filename or message ID is invalid")
         payload = await self._get_json(
             f"/users/{quote(self.user_id, safe='')}/messages/"
             f"{quote(message_id, safe='')}/attachments/"
@@ -159,6 +205,6 @@ class GmailDisputeClient:
         raw = base64.urlsafe_b64decode(f"{encoded}{padding}")
         if len(raw) > _MAX_ATTACHMENT_BYTES:
             raise ChargebackError("Gmail attachment exceeds the 25 MB safety limit")
-        destination = directory / filename
+        destination = directory / f"{safe_message_id}__{filename}"
         destination.write_bytes(raw)
         return destination
