@@ -24,4 +24,4 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Compile source
-        run: python -m compileall -q legacy_ops
+        run: python -m compileall -q legacy_ops browser_automation
