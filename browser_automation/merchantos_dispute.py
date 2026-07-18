@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 from urllib.parse import urlparse
 
 from legacy_ops.chargebacks import (
@@ -37,12 +37,38 @@ class PortalResult:
     submission_reference: str | None = None
 
 
+def _normalized_evidence(items: Sequence[Any]) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for item in items:
+        if hasattr(item, "to_dict"):
+            value = item.to_dict()
+        else:
+            value = dict(item)
+        if not bool(value.get("verified")):
+            continue
+        output.append(
+            {
+                "evidence_type": str(value.get("evidence_type") or ""),
+                "reference": str(value.get("reference") or ""),
+                "sha256": str(value.get("sha256") or ""),
+            }
+        )
+    return sorted(
+        output,
+        key=lambda value: (
+            value["evidence_type"],
+            value["reference"],
+            value["sha256"],
+        ),
+    )
+
+
 class MerchantOSDisputeFiler:
     """Fill or submit the MerchantOS dispute form through Playwright.
 
-    `submit=False` is the default. A final submission additionally requires an
-    approved control-plane action plus explicit, live-validated selectors for
-    the submit button and confirmation element.
+    Preview is the default. Final submission requires a current owner approval
+    whose exact text, portal URL, amount, and evidence manifest still match the
+    package being sent.
     """
 
     def __init__(
@@ -57,14 +83,28 @@ class MerchantOSDisputeFiler:
         self.allowed_evidence_roots = roots
         self.selectors = selectors or MerchantOSSelectors()
 
+    @staticmethod
+    def _is_external_reference(reference: str) -> bool:
+        parsed = urlparse(reference)
+        return bool(parsed.scheme and parsed.scheme != "file")
+
     def _evidence_paths(self, package: DisputePackage) -> tuple[Path, ...]:
         output: list[Path] = []
         for item in package.evidence:
             if not item.verified:
                 continue
-            candidate = Path(item.reference).expanduser()
-            if not candidate.exists() or not candidate.is_file():
+            reference = str(item.reference or "").strip()
+            if not reference:
+                raise ChargebackError(
+                    f"Verified {item.evidence_type.value} evidence has no reference"
+                )
+            if self._is_external_reference(reference):
                 continue
+            candidate = Path(reference.removeprefix("file://")).expanduser()
+            if not candidate.exists() or not candidate.is_file():
+                raise ChargebackError(
+                    f"Verified evidence file is unavailable: {candidate.name or reference}"
+                )
             resolved = candidate.resolve()
             if not any(
                 resolved == root or root in resolved.parents
@@ -76,7 +116,7 @@ class MerchantOSDisputeFiler:
             output.append(resolved)
         if not output:
             raise ChargebackError(
-                "No verified evidence files are available for portal upload"
+                "No verified local evidence files are available for portal upload"
             )
         return tuple(output)
 
@@ -95,8 +135,19 @@ class MerchantOSDisputeFiler:
             raise ChargebackError("Final submission requires an approved action")
         if approval.action_type != "file_chargeback_dispute":
             raise ChargebackError("Approval does not authorize chargeback submission")
-        if str(approval.payload.get("case_id")) != package.notice.case_id:
+        payload = approval.payload
+        if str(payload.get("case_id")) != package.notice.case_id:
             raise ChargebackError("Approval belongs to a different chargeback case")
+        if str(payload.get("amount")) != str(package.notice.amount):
+            raise ChargebackError("Disputed amount changed after approval")
+        if str(payload.get("portal_url") or "") != str(package.notice.portal_url or ""):
+            raise ChargebackError("MerchantOS portal URL changed after approval")
+        if str(payload.get("reason_for_challenge") or "") != package.reason_for_challenge:
+            raise ChargebackError("Challenge statement changed after approval")
+        if _normalized_evidence(payload.get("evidence") or []) != _normalized_evidence(
+            package.evidence
+        ):
+            raise ChargebackError("Evidence manifest changed after approval")
         return approval_id
 
     def fill_or_submit(
@@ -162,22 +213,24 @@ class MerchantOSDisputeFiler:
                     "MerchantOS navigation left the approved portal host"
                 )
 
-            textarea = None
-            for selector in self.selectors.reason_textarea_selectors:
-                locator = page.locator(selector)
-                if locator.count() > 0:
-                    textarea = locator.first
-                    break
-            if textarea is None:
+            combined_selector = ", ".join(self.selectors.reason_textarea_selectors)
+            try:
+                textarea = page.locator(combined_selector).first
+                textarea.wait_for(state="attached")
+                textarea.fill(reason)
+            except PlaywrightTimeoutError as exc:
                 browser.close()
-                raise ChargebackError("Reason-for-challenge textarea was not found")
-            textarea.fill(reason)
+                raise ChargebackError(
+                    "Reason-for-challenge textarea was not found"
+                ) from exc
 
-            upload_input = page.locator(self.selectors.file_input_selector)
-            if upload_input.count() == 0:
+            try:
+                upload_input = page.locator(self.selectors.file_input_selector).first
+                upload_input.wait_for(state="attached")
+                upload_input.set_input_files([str(item) for item in evidence_paths])
+            except PlaywrightTimeoutError as exc:
                 browser.close()
-                raise ChargebackError("Evidence upload input was not found")
-            upload_input.first.set_input_files([str(item) for item in evidence_paths])
+                raise ChargebackError("Evidence upload input was not found") from exc
 
             if screenshot_path:
                 capture_path = Path(screenshot_path).expanduser().resolve()
@@ -193,8 +246,8 @@ class MerchantOSDisputeFiler:
                     screenshot_path=str(capture_path) if capture_path else None,
                 )
 
-            page.locator(self.selectors.submit_button_selector).click()
             try:
+                page.locator(self.selectors.submit_button_selector).click()
                 confirmation = page.locator(
                     self.selectors.confirmation_selector
                 ).first
@@ -205,7 +258,7 @@ class MerchantOSDisputeFiler:
             except PlaywrightTimeoutError as exc:
                 browser.close()
                 raise ChargebackError(
-                    "Submission was clicked but confirmation was not observed"
+                    "Submission click failed or confirmation was not observed"
                 ) from exc
 
             if not confirmation_text:
@@ -213,9 +266,8 @@ class MerchantOSDisputeFiler:
                 raise ChargebackError(
                     "Submission confirmation did not contain a reference"
                 )
-            submission_reference = (
-                confirmation_text[:240]
-                or f"{package.notice.case_id}-"
+            submission_reference = confirmation_text[:240] or (
+                f"{package.notice.case_id}-"
                 f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
             )
             if state_path:
