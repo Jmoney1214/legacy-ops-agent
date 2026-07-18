@@ -7,10 +7,10 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
+from legacy_ops.chargeback_integrity import AtomicChargebackWorkflow
 from legacy_ops.chargeback_pipeline import ChargebackPipeline
 from legacy_ops.chargebacks import (
     CaseStatus,
-    ChargebackWorkflow,
     EmailMessage,
     EvidenceDocument,
     EvidenceType,
@@ -47,6 +47,8 @@ class FakeGmail:
 
 
 class FakeLightspeed:
+    strict_matching = True
+
     async def find_candidates(self, notice, **kwargs):
         return [
             PosSale(
@@ -101,7 +103,7 @@ class ChargebackPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             store = SQLiteStore(Path(tempdir) / "ops.db")
             approvals = ApprovalService(store)
-            workflow = ChargebackWorkflow(store, approvals)
+            workflow = AtomicChargebackWorkflow(store, approvals)
             pipeline = ChargebackPipeline(
                 gmail=FakeGmail(),  # type: ignore[arg-type]
                 lightspeed=FakeLightspeed(),  # type: ignore[arg-type]
