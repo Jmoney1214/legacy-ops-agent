@@ -6,11 +6,11 @@ from typing import Awaitable, Callable, Sequence
 
 from .chargebacks import (
     ChargebackError,
-    ChargebackWorkflow,
     DisputePackage,
     EmailMessage,
     EvidenceDocument,
 )
+from .control_plane import redact_text
 from .domain import AuditEvent, Severity
 from .gmail_disputes import GmailDisputeClient
 from .lightspeed_chargeback_sales import LightspeedChargebackSaleClient
@@ -41,16 +41,11 @@ class ChargebackScanResult:
 
 
 class ChargebackPipeline:
-    """Orchestrates Gmail intake, Lightspeed lookup, and approval preparation.
+    """Gmail intake, deterministic Lightspeed lookup, and approval preparation.
 
-    This production entry point intentionally requires the strict Lightspeed
-    adapter and atomic workflow from `legacy_ops.chargeback_integrity`. The
-    intake path cannot silently fall back to fail-open timestamp handling,
-    amount-conflicting exact matches, or non-atomic submission finalization.
-
-    The pipeline does not submit a dispute form. Browser submission remains a
-    separate approval-gated executor so the read/prepare path cannot acquire an
-    accidental financial side effect.
+    Production execution requires adapters that explicitly advertise the strict
+    and production-hardened contracts. A single transport or decoding failure is
+    recorded against that message and cannot terminate the rest of the scan.
     """
 
     def __init__(
@@ -58,16 +53,24 @@ class ChargebackPipeline:
         *,
         gmail: GmailDisputeClient,
         lightspeed: LightspeedChargebackSaleClient,
-        workflow: ChargebackWorkflow,
+        workflow,
         evidence_resolver: EvidenceResolver,
     ):
         if not getattr(workflow, "atomic_submission", False):
             raise ChargebackError(
-                "ChargebackPipeline requires AtomicChargebackWorkflow"
+                "ChargebackPipeline requires an atomic chargeback workflow"
+            )
+        if not getattr(workflow, "production_hardened", False):
+            raise ChargebackError(
+                "ChargebackPipeline requires ProductionChargebackWorkflow"
             )
         if not getattr(lightspeed, "strict_matching", False):
             raise ChargebackError(
-                "ChargebackPipeline requires StrictLightspeedChargebackSaleClient"
+                "ChargebackPipeline requires a strict Lightspeed adapter"
+            )
+        if not getattr(lightspeed, "production_hardened", False):
+            raise ChargebackError(
+                "ChargebackPipeline requires ProductionLightspeedChargebackSaleClient"
             )
         self.gmail = gmail
         self.lightspeed = lightspeed
@@ -83,6 +86,31 @@ class ChargebackPipeline:
         if isawaitable(value):
             return await value
         return value
+
+    def _record_failure(self, email: EmailMessage, exc: Exception) -> IntakeFailure:
+        explanation = redact_text(str(exc) or type(exc).__name__)
+        failure = IntakeFailure(
+            message_id=email.message_id,
+            subject=email.subject,
+            error_type=type(exc).__name__,
+            explanation=explanation,
+        )
+        self.workflow.store.save_audit_event(
+            AuditEvent(
+                event_type="chargeback_intake_failed",
+                actor="chargeback_dispute_agent",
+                action="manual_review_required",
+                resource_type="gmail_message",
+                resource_id=email.message_id,
+                details={
+                    "subject": email.subject,
+                    "error_type": type(exc).__name__,
+                    "explanation": explanation,
+                },
+                severity=Severity.MEDIUM,
+            )
+        )
+        return failure
 
     async def scan_and_prepare(
         self,
@@ -117,28 +145,6 @@ class ChargebackPipeline:
                     default_timezone=default_timezone,
                 )
                 result.packages.append(package)
-            except ChargebackError as exc:
-                result.failures.append(
-                    IntakeFailure(
-                        message_id=email.message_id,
-                        subject=email.subject,
-                        error_type=type(exc).__name__,
-                        explanation=str(exc),
-                    )
-                )
-                self.workflow.store.save_audit_event(
-                    AuditEvent(
-                        event_type="chargeback_intake_failed",
-                        actor="chargeback_dispute_agent",
-                        action="manual_review_required",
-                        resource_type="gmail_message",
-                        resource_id=email.message_id,
-                        details={
-                            "subject": email.subject,
-                            "error_type": type(exc).__name__,
-                            "explanation": str(exc),
-                        },
-                        severity=Severity.MEDIUM,
-                    )
-                )
+            except Exception as exc:
+                result.failures.append(self._record_failure(email, exc))
         return result
