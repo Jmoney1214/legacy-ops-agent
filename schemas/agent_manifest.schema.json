@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://legacywineandliquor.com/schemas/agent-manifest.schema.json",
+  "title": "Legacy Agent Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_id",
+    "version",
+    "display_name",
+    "purpose",
+    "owner",
+    "risk_level",
+    "instructions_path",
+    "tools",
+    "permissions",
+    "approval_actions",
+    "execution_mode",
+    "loop_policy",
+    "context_policy",
+    "memory_policy"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 20
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risk_level": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "instructions_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "read",
+            "write",
+            "execute"
+          ]
+        },
+        "uniqueItems": true
+      }
+    },
+    "approval_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "execution_mode": {
+      "enum": [
+        "human_in_the_loop",
+        "human_on_the_loop",
+        "human_out_of_the_loop"
+      ]
+    },
+    "loop_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_iterations",
+        "max_tool_calls",
+        "max_runtime_seconds",
+        "max_cost_usd",
+        "max_consecutive_failures"
+      ],
+      "properties": {
+        "max_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        },
+        "max_tool_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "max_runtime_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "max_cost_usd": {
+          "type": [
+            "number",
+            "string"
+          ]
+        },
+        "max_consecutive_failures": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        }
+      }
+    },
+    "context_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_items",
+        "max_characters",
+        "allowed_sources",
+        "forbidden_data_classes",
+        "require_source_attribution"
+      ],
+      "properties": {
+        "max_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "max_characters": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 1000000
+        },
+        "allowed_sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "forbidden_data_classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "require_source_attribution": {
+          "type": "boolean"
+        }
+      }
+    },
+    "memory_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read_scopes",
+        "write_scopes",
+        "retention_days",
+        "require_write_attribution"
+      ],
+      "properties": {
+        "read_scopes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "working",
+              "episodic",
+              "semantic",
+              "procedural"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "write_scopes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "working",
+              "episodic",
+              "semantic",
+              "procedural"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "require_write_attribution": {
+          "type": "boolean"
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    }
+  }
+}

@@ -248,8 +248,8 @@ class AgentManifest:
                 memory_policy=MemoryPolicy.from_mapping(value.get("memory_policy")),
                 tags=_string_tuple(value.get("tags", ())),
             )
-        except ValueError as exc:
-            raise ManifestError("manifest contains an invalid enum value") from exc
+        except (TypeError, ValueError, InvalidOperation) as exc:
+            raise ManifestError("manifest contains an invalid value") from exc
         manifest.validate()
         return manifest
 
@@ -308,6 +308,10 @@ class AgentManifest:
         ):
             raise ManifestError(
                 "high or critical risk agents cannot be human-out-of-the-loop"
+            )
+        if self.tools and self.loop_policy.max_tool_calls < 1:
+            raise ManifestError(
+                "agents with declared tools must allow at least one tool call"
             )
         self.loop_policy.validate()
         self.context_policy.validate()

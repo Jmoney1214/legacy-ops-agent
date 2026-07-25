@@ -3,3 +3,4 @@ httpx
 starlette
 uvicorn
 python-dotenv
+PyYAML>=6.0.2,<7

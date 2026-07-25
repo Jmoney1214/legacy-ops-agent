@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from time import monotonic
 
@@ -40,6 +40,8 @@ class LoopState:
 
 
 class LoopController:
+    """Enforces budgets before a new iteration or tool call begins."""
+
     def __init__(self, policy: LoopPolicy):
         policy.validate()
         self.state = LoopState(policy=policy)
@@ -48,27 +50,53 @@ class LoopController:
         if self.state.stop_reason is not None:
             raise LoopError(f"loop already stopped: {self.state.stop_reason.value}")
 
-    def before_iteration(self) -> None:
+    @staticmethod
+    def _cost(value: Decimal | str) -> Decimal:
+        try:
+            cost = Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise LoopError("estimated cost must be numeric") from exc
+        if cost < 0:
+            raise LoopError("estimated cost cannot be negative")
+        return cost
+
+    def _reserve_cost(self, cost: Decimal) -> None:
+        if self.state.estimated_cost_usd + cost > self.state.policy.max_cost_usd:
+            self.state.stop_reason = StopReason.MAX_COST
+            raise LoopError("loop budget reached: max_cost")
+        self.state.estimated_cost_usd += cost
+
+    def before_iteration(
+        self, estimated_cost_usd: Decimal | str = Decimal("0")
+    ) -> None:
         self._ensure_running()
-        reason = self.evaluate_limits()
-        if reason is not None:
-            self.state.stop_reason = reason
-            raise LoopError(f"loop budget reached: {reason.value}")
+        if self.state.elapsed_seconds >= self.state.policy.max_runtime_seconds:
+            self.state.stop_reason = StopReason.MAX_RUNTIME
+            raise LoopError("loop budget reached: max_runtime")
+        if self.state.iterations >= self.state.policy.max_iterations:
+            self.state.stop_reason = StopReason.MAX_ITERATIONS
+            raise LoopError("loop budget reached: max_iterations")
+        self._reserve_cost(self._cost(estimated_cost_usd))
         self.state.iterations += 1
 
-    def record_tool_call(self, estimated_cost_usd: Decimal | str = Decimal("0")) -> None:
+    def before_tool_call(
+        self, estimated_cost_usd: Decimal | str = Decimal("0")
+    ) -> None:
         self._ensure_running()
-        try:
-            cost = Decimal(str(estimated_cost_usd))
-        except Exception as exc:
-            raise LoopError("estimated tool-call cost must be numeric") from exc
-        if cost < 0:
-            raise LoopError("estimated tool-call cost cannot be negative")
+        if self.state.elapsed_seconds >= self.state.policy.max_runtime_seconds:
+            self.state.stop_reason = StopReason.MAX_RUNTIME
+            raise LoopError("loop budget reached: max_runtime")
+        if self.state.tool_calls >= self.state.policy.max_tool_calls:
+            self.state.stop_reason = StopReason.MAX_TOOL_CALLS
+            raise LoopError("loop budget reached: max_tool_calls")
+        self._reserve_cost(self._cost(estimated_cost_usd))
         self.state.tool_calls += 1
-        self.state.estimated_cost_usd += cost
-        reason = self.evaluate_limits()
-        if reason is not None:
-            self.state.stop_reason = reason
+
+    def record_tool_call(
+        self, estimated_cost_usd: Decimal | str = Decimal("0")
+    ) -> None:
+        """Compatibility alias; call immediately before executing the tool."""
+        self.before_tool_call(estimated_cost_usd)
 
     def record_success(self) -> None:
         self._ensure_running()
@@ -83,9 +111,11 @@ class LoopController:
         else:
             self.state.last_failure_signature = normalized
             self.state.consecutive_failures = 1
-        reason = self.evaluate_limits()
-        if reason is not None:
-            self.state.stop_reason = reason
+        if (
+            self.state.consecutive_failures
+            >= self.state.policy.max_consecutive_failures
+        ):
+            self.state.stop_reason = StopReason.REPEATED_FAILURE
 
     def stop(self, reason: StopReason) -> StopReason:
         if self.state.stop_reason is None:
@@ -93,14 +123,17 @@ class LoopController:
         return self.state.stop_reason
 
     def evaluate_limits(self) -> StopReason | None:
+        if self.state.stop_reason is not None:
+            return self.state.stop_reason
         policy = self.state.policy
-        if self.state.iterations >= policy.max_iterations:
-            return StopReason.MAX_ITERATIONS
-        if self.state.tool_calls >= policy.max_tool_calls:
-            return StopReason.MAX_TOOL_CALLS
         if self.state.elapsed_seconds >= policy.max_runtime_seconds:
             return StopReason.MAX_RUNTIME
-        if self.state.estimated_cost_usd >= policy.max_cost_usd:
+        if self.state.iterations >= policy.max_iterations and self.state.iterations > 0:
+            return StopReason.MAX_ITERATIONS
+        if (
+            self.state.estimated_cost_usd >= policy.max_cost_usd
+            and self.state.estimated_cost_usd > 0
+        ):
             return StopReason.MAX_COST
         if self.state.consecutive_failures >= policy.max_consecutive_failures:
             return StopReason.REPEATED_FAILURE
@@ -108,8 +141,6 @@ class LoopController:
 
     @property
     def should_stop(self) -> bool:
-        if self.state.stop_reason is not None:
-            return True
         reason = self.evaluate_limits()
         if reason is not None:
             self.state.stop_reason = reason

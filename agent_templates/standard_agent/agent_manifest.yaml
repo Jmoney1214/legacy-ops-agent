@@ -1,0 +1,35 @@
+agent_id: standard_agent
+version: 0.1.0
+display_name: Standard Agent
+purpose: Demonstrate the governed Legacy agent artifact and build contract.
+owner: agent_platform
+risk_level: low
+instructions_path: agent_templates/standard_agent/instructions.md
+tools: []
+permissions: {}
+approval_actions: []
+execution_mode: human_in_the_loop
+loop_policy:
+  max_iterations: 6
+  max_tool_calls: 0
+  max_runtime_seconds: 180
+  max_cost_usd: '1.00'
+  max_consecutive_failures: 2
+context_policy:
+  max_items: 30
+  max_characters: 60000
+  allowed_sources: []
+  forbidden_data_classes:
+  - full_card_number
+  - password
+  - oauth_token
+  - api_key
+  require_source_attribution: true
+memory_policy:
+  read_scopes:
+  - working
+  write_scopes: []
+  retention_days: 30
+  require_write_attribution: true
+tags:
+- template

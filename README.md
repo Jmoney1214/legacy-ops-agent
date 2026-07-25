@@ -51,3 +51,40 @@ Browser storage state, dispute evidence, screenshots, OAuth tokens, API keys, an
 ## Security
 
 Never commit access tokens, OAuth codes, passwords, session cookies, API keys, card numbers, or `.env` files. Any credential that has ever appeared in Git history must be treated as compromised and rotated before production use.
+
+## Agent platform
+
+The repository now includes a governed build pipeline for future business agents.
+This is separate from the deterministic operational services already implemented.
+
+Core platform components:
+
+- strict versioned agent manifests;
+- standard agent scaffolding and workspace validation;
+- immutable artifact digests;
+- typed tool schemas and least-privilege permissions;
+- exact approval-action binding for side-effecting tools;
+- bounded loop, runtime, failure, tool-call, and cost controls;
+- durable agent lifecycle registry;
+- redacted, ordered trace events;
+- ordered contract, tool, guardrail, test, eval, review, staging, and release gates;
+- owner-approved production promotion bound to the exact artifact.
+
+Create a scaffold:
+
+```bash
+python -m legacy_ops.agent_cli scaffold inventory_agent \
+  --display-name "Inventory Agent" \
+  --purpose "Review inventory and surface replenishment exceptions." \
+  --owner inventory_operations
+```
+
+Validate an agent and calculate its artifact digest:
+
+```bash
+python -m legacy_ops.agent_cli validate agents/inventory_agent
+```
+
+See `docs/agent-build-pipeline.md` for the complete contract. This platform does not
+yet mean that LLM-powered business agents are live; it governs how those agents will
+be created and released in subsequent phases.

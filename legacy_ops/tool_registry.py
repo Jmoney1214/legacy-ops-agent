@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Sequence
 
 from .agent_manifest import AgentManifest, ToolPermission
 from .domain import Severity
@@ -18,6 +18,39 @@ class SideEffectLevel(StrEnum):
     IRREVERSIBLE = "irreversible"
 
 
+_SEVERITY_RANK = {
+    Severity.INFO: 0,
+    Severity.LOW: 1,
+    Severity.MEDIUM: 2,
+    Severity.HIGH: 3,
+    Severity.CRITICAL: 4,
+}
+_SUPPORTED_SCHEMA_KEYS = {
+    "type",
+    "properties",
+    "required",
+    "additionalProperties",
+    "items",
+    "enum",
+    "minLength",
+    "maxLength",
+    "minimum",
+    "maximum",
+    "minItems",
+    "maxItems",
+    "description",
+}
+_SUPPORTED_TYPES = {
+    "string",
+    "integer",
+    "number",
+    "boolean",
+    "array",
+    "object",
+    "null",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class ToolSpec:
     name: str
@@ -26,6 +59,7 @@ class ToolSpec:
     output_schema: Mapping[str, Any] = field(default_factory=dict)
     side_effect_level: SideEffectLevel = SideEffectLevel.NONE
     minimum_risk_level: Severity = Severity.INFO
+    required_approval_action: str | None = None
     handler: Callable[..., Any] | None = None
 
     def validate(self) -> None:
@@ -35,22 +69,25 @@ class ToolSpec:
             )
         if len(self.description.strip()) < 12:
             raise ToolRegistryError("tool descriptions must be at least 12 characters")
-        if self.input_schema.get("type") != "object":
-            raise ToolRegistryError("tool input_schema root type must be object")
-        properties = self.input_schema.get("properties", {})
-        if not isinstance(properties, Mapping):
-            raise ToolRegistryError("tool input_schema properties must be a mapping")
-        required = self.input_schema.get("required", [])
-        if not isinstance(required, list):
-            raise ToolRegistryError("tool input_schema required must be a list")
-        missing = set(required) - set(properties)
-        if missing:
-            raise ToolRegistryError(
-                f"required fields missing schemas: {', '.join(sorted(missing))}"
+        _validate_schema_definition(
+            self.input_schema,
+            path=f"{self.name}.input",
+            require_strict_object=True,
+        )
+        if self.output_schema:
+            _validate_schema_definition(
+                self.output_schema,
+                path=f"{self.name}.output",
+                require_strict_object=False,
             )
-        if self.input_schema.get("additionalProperties", False) is not False:
+        if self.side_effect_level is SideEffectLevel.NONE:
+            if self.required_approval_action:
+                raise ToolRegistryError(
+                    "read-only tools cannot require an approval action"
+                )
+        elif not str(self.required_approval_action or "").strip():
             raise ToolRegistryError(
-                "tool input schemas must set additionalProperties to false"
+                "side-effecting tools require a specific approval action"
             )
 
 
@@ -89,19 +126,40 @@ class ToolRegistry:
         for tool_name in manifest.tools:
             spec = self.get(tool_name)
             permissions = manifest.permissions[tool_name]
-            if (
-                spec.side_effect_level is SideEffectLevel.NONE
-                and ToolPermission.EXECUTE in permissions
-            ):
+            if _SEVERITY_RANK[manifest.risk_level] < _SEVERITY_RANK[spec.minimum_risk_level]:
                 raise ToolRegistryError(
-                    f"read-only tool {tool_name} cannot grant execute permission"
+                    f"agent risk_level is too low for tool {tool_name}"
                 )
-            if (
-                spec.side_effect_level is SideEffectLevel.IRREVERSIBLE
-                and ToolPermission.EXECUTE not in permissions
-            ):
+            if spec.side_effect_level is SideEffectLevel.NONE:
+                if ToolPermission.READ not in permissions:
+                    raise ToolRegistryError(
+                        f"read-only tool {tool_name} requires read permission"
+                    )
+                forbidden = permissions & {
+                    ToolPermission.WRITE,
+                    ToolPermission.EXECUTE,
+                }
+                if forbidden:
+                    raise ToolRegistryError(
+                        f"read-only tool {tool_name} cannot grant write or execute permission"
+                    )
+            elif spec.side_effect_level is SideEffectLevel.REVERSIBLE:
+                if not (
+                    ToolPermission.WRITE in permissions
+                    or ToolPermission.EXECUTE in permissions
+                ):
+                    raise ToolRegistryError(
+                        f"reversible tool {tool_name} requires write or execute permission"
+                    )
+            elif ToolPermission.EXECUTE not in permissions:
                 raise ToolRegistryError(
                     f"irreversible tool {tool_name} requires execute permission"
+                )
+
+            required_action = spec.required_approval_action
+            if required_action and required_action not in manifest.approval_actions:
+                raise ToolRegistryError(
+                    f"tool {tool_name} requires approval action {required_action}"
                 )
 
     def authorize(
@@ -123,21 +181,18 @@ class ToolRegistry:
                 f"agent lacks {permission.value} permission for {tool_name}",
             )
 
-        needs_approval = (
-            permission in {ToolPermission.WRITE, ToolPermission.EXECUTE}
-            or spec.side_effect_level is not SideEffectLevel.NONE
-        )
-        if needs_approval:
-            if not approval_action:
+        required_action = spec.required_approval_action
+        if required_action:
+            if approval_action != required_action:
                 return AuthorizationDecision(
                     False,
-                    "side-effecting tool call is missing an approval action",
+                    f"tool requires approval action {required_action}",
                     requires_approval=True,
                 )
-            if approval_action not in manifest.approval_actions:
+            if required_action not in manifest.approval_actions:
                 return AuthorizationDecision(
                     False,
-                    "approval action is not authorized by the agent manifest",
+                    "required approval action is not authorized by the agent manifest",
                     requires_approval=True,
                 )
             if not approval_granted:
@@ -150,26 +205,148 @@ class ToolRegistry:
         return AuthorizationDecision(True, "authorized", requires_approval=False)
 
     def validate_input(self, tool_name: str, payload: Mapping[str, Any]) -> None:
-        spec = self.get(tool_name)
-        schema = spec.input_schema
+        _validate_value(
+            payload,
+            self.get(tool_name).input_schema,
+            path=f"{tool_name}.input",
+        )
+
+    def validate_output(self, tool_name: str, output: Any) -> None:
+        schema = self.get(tool_name).output_schema
+        if schema:
+            _validate_value(output, schema, path=f"{tool_name}.output")
+
+
+def _validate_schema_definition(
+    schema: Mapping[str, Any],
+    *,
+    path: str,
+    require_strict_object: bool,
+) -> None:
+    if not isinstance(schema, Mapping):
+        raise ToolRegistryError(f"{path} schema must be a mapping")
+    unknown = set(schema) - _SUPPORTED_SCHEMA_KEYS
+    if unknown:
+        raise ToolRegistryError(
+            f"{path} schema uses unsupported keywords: {', '.join(sorted(unknown))}"
+        )
+    schema_type = schema.get("type")
+    if schema_type not in _SUPPORTED_TYPES:
+        raise ToolRegistryError(f"{path} schema has an unsupported type")
+    if "enum" in schema:
+        enum = schema["enum"]
+        if not isinstance(enum, list) or not enum:
+            raise ToolRegistryError(f"{path} enum must be a non-empty list")
+
+    if schema_type == "object":
         properties = schema.get("properties", {})
-        required = set(schema.get("required", []))
-        missing = required - set(payload)
+        if not isinstance(properties, Mapping):
+            raise ToolRegistryError(f"{path} properties must be a mapping")
+        required = schema.get("required", [])
+        if not isinstance(required, list) or not all(
+            isinstance(item, str) for item in required
+        ):
+            raise ToolRegistryError(f"{path} required must be a string list")
+        missing = set(required) - set(properties)
         if missing:
             raise ToolRegistryError(
-                f"missing required tool fields: {', '.join(sorted(missing))}"
+                f"{path} required fields missing schemas: "
+                f"{', '.join(sorted(missing))}"
             )
-        unknown = set(payload) - set(properties)
-        if unknown:
+        if (
+            require_strict_object or properties
+        ) and schema.get("additionalProperties") is not False:
             raise ToolRegistryError(
-                f"unknown tool fields: {', '.join(sorted(unknown))}"
+                f"{path} object schema must set additionalProperties to false"
             )
-        for field_name, value in payload.items():
-            expected = properties[field_name].get("type")
-            if expected and not _matches_type(value, expected):
-                raise ToolRegistryError(
-                    f"tool field {field_name!r} must be {expected}"
-                )
+        for name, child in properties.items():
+            _validate_schema_definition(
+                child,
+                path=f"{path}.{name}",
+                require_strict_object=False,
+            )
+    elif schema_type == "array":
+        items = schema.get("items")
+        if not isinstance(items, Mapping):
+            raise ToolRegistryError(f"{path} array schema requires items")
+        _validate_schema_definition(
+            items,
+            path=f"{path}[]",
+            require_strict_object=False,
+        )
+    elif "properties" in schema or "required" in schema or "items" in schema:
+        raise ToolRegistryError(
+            f"{path} schema contains keywords incompatible with {schema_type}"
+        )
+
+    for minimum_key, maximum_key in (
+        ("minLength", "maxLength"),
+        ("minItems", "maxItems"),
+        ("minimum", "maximum"),
+    ):
+        minimum = schema.get(minimum_key)
+        maximum = schema.get(maximum_key)
+        if minimum is not None and (
+            not isinstance(minimum, (int, float)) or isinstance(minimum, bool)
+        ):
+            raise ToolRegistryError(f"{path} {minimum_key} must be numeric")
+        if maximum is not None and (
+            not isinstance(maximum, (int, float)) or isinstance(maximum, bool)
+        ):
+            raise ToolRegistryError(f"{path} {maximum_key} must be numeric")
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ToolRegistryError(
+                f"{path} {minimum_key} cannot exceed {maximum_key}"
+            )
+
+
+def _validate_value(value: Any, schema: Mapping[str, Any], *, path: str) -> None:
+    expected = str(schema["type"])
+    if not _matches_type(value, expected):
+        raise ToolRegistryError(f"{path} must be {expected}")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ToolRegistryError(f"{path} is not an allowed enum value")
+
+    if expected == "object":
+        properties = schema.get("properties", {})
+        required = set(schema.get("required", []))
+        missing = required - set(value)
+        if missing:
+            raise ToolRegistryError(
+                f"{path} is missing fields: {', '.join(sorted(missing))}"
+            )
+        unknown = set(value) - set(properties)
+        if unknown and schema.get("additionalProperties") is False:
+            raise ToolRegistryError(
+                f"{path} has unknown fields: {', '.join(sorted(unknown))}"
+            )
+        for name, item in value.items():
+            child_schema = properties.get(name)
+            if child_schema is not None:
+                _validate_value(item, child_schema, path=f"{path}.{name}")
+    elif expected == "array":
+        minimum = schema.get("minItems")
+        maximum = schema.get("maxItems")
+        if minimum is not None and len(value) < minimum:
+            raise ToolRegistryError(f"{path} has too few items")
+        if maximum is not None and len(value) > maximum:
+            raise ToolRegistryError(f"{path} has too many items")
+        for index, item in enumerate(value):
+            _validate_value(item, schema["items"], path=f"{path}[{index}]")
+    elif expected == "string":
+        minimum = schema.get("minLength")
+        maximum = schema.get("maxLength")
+        if minimum is not None and len(value) < minimum:
+            raise ToolRegistryError(f"{path} is shorter than minLength")
+        if maximum is not None and len(value) > maximum:
+            raise ToolRegistryError(f"{path} is longer than maxLength")
+    elif expected in {"integer", "number"}:
+        minimum = schema.get("minimum")
+        maximum = schema.get("maximum")
+        if minimum is not None and value < minimum:
+            raise ToolRegistryError(f"{path} is below minimum")
+        if maximum is not None and value > maximum:
+            raise ToolRegistryError(f"{path} exceeds maximum")
 
 
 def _matches_type(value: Any, expected: str) -> bool:

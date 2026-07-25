@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from decimal import Decimal
+import re
+from dataclasses import dataclass, replace
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any, Mapping
 from uuid import uuid4
@@ -39,6 +40,8 @@ _ALLOWED_STAGE_TRANSITIONS = {
     },
     AgentLifecycleStage.RETIRED: set(),
 }
+_EVENT_TYPE = re.compile(r"^[a-z][a-z0-9_.-]{1,79}$")
+_MAX_TRACE_PAYLOAD_BYTES = 256_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,20 +59,30 @@ class TraceEvent:
     version: str
     event_type: str
     payload: Mapping[str, Any]
+    parent_event_id: str | None = None
     duration_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
     cost_usd: Decimal | None = None
+    sequence_number: int | None = None
     id: str = ""
     created_at: str = ""
 
     def normalized(self) -> "TraceEvent":
         return TraceEvent(
-            run_id=self.run_id,
-            agent_id=self.agent_id,
-            version=self.version,
-            event_type=self.event_type,
+            run_id=self.run_id.strip(),
+            agent_id=self.agent_id.strip(),
+            version=self.version.strip(),
+            event_type=self.event_type.strip(),
             payload=redact_data(dict(self.payload)),
+            parent_event_id=(
+                self.parent_event_id.strip() if self.parent_event_id else None
+            ),
             duration_ms=self.duration_ms,
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
             cost_usd=self.cost_usd,
+            sequence_number=self.sequence_number,
             id=self.id or str(uuid4()),
             created_at=self.created_at or utc_now_iso(),
         )
@@ -97,11 +110,15 @@ class AgentRegistry:
                 CREATE TABLE IF NOT EXISTS agent_trace_events (
                     id TEXT PRIMARY KEY,
                     run_id TEXT NOT NULL,
+                    sequence_number INTEGER,
+                    parent_event_id TEXT,
                     agent_id TEXT NOT NULL,
                     version TEXT NOT NULL,
                     event_type TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
                     duration_ms INTEGER,
+                    input_tokens INTEGER,
+                    output_tokens INTEGER,
                     cost_usd TEXT,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (agent_id, version)
@@ -109,8 +126,42 @@ class AgentRegistry:
                 );
                 CREATE INDEX IF NOT EXISTS idx_agent_manifest_stage
                     ON agent_manifests(lifecycle_stage, updated_at);
-                CREATE INDEX IF NOT EXISTS idx_agent_trace_run
-                    ON agent_trace_events(run_id, created_at);
+                """
+            )
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(agent_trace_events)"
+                ).fetchall()
+            }
+            for column, definition in {
+                "sequence_number": "INTEGER",
+                "parent_event_id": "TEXT",
+                "input_tokens": "INTEGER",
+                "output_tokens": "INTEGER",
+            }.items():
+                if column not in columns:
+                    connection.execute(
+                        f"ALTER TABLE agent_trace_events "
+                        f"ADD COLUMN {column} {definition}"
+                    )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_agent_trace_run_created
+                ON agent_trace_events(run_id, created_at)
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_agent_trace_order
+                ON agent_trace_events(run_id, sequence_number, created_at)
+                """
+            )
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_trace_sequence
+                ON agent_trace_events(run_id, sequence_number)
+                WHERE sequence_number IS NOT NULL
                 """
             )
 
@@ -121,6 +172,8 @@ class AgentRegistry:
         actor: str,
     ) -> RegisteredAgent:
         manifest.validate()
+        if not actor.strip():
+            raise AgentRegistryError("registration actor is required")
         now = utc_now_iso()
         with self.store.connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -207,6 +260,17 @@ class AgentRegistry:
         actor: str,
         evidence: Mapping[str, Any] | None = None,
     ) -> RegisteredAgent:
+        if not actor.strip():
+            raise AgentRegistryError("lifecycle actor is required")
+        if (
+            expected_stage
+            in {AgentLifecycleStage.PRODUCTION, AgentLifecycleStage.RETIRED}
+            or new_stage
+            in {AgentLifecycleStage.PRODUCTION, AgentLifecycleStage.RETIRED}
+        ):
+            raise AgentRegistryError(
+                "production and retirement transitions require a governed release workflow"
+            )
         allowed = _ALLOWED_STAGE_TRANSITIONS[expected_stage]
         if new_stage not in allowed:
             raise AgentRegistryError(
@@ -267,41 +331,113 @@ class AgentRegistry:
 
     def record_trace(self, event: TraceEvent) -> TraceEvent:
         normalized = event.normalized()
-        if normalized.duration_ms is not None and normalized.duration_ms < 0:
-            raise AgentRegistryError("trace duration_ms cannot be negative")
-        if normalized.cost_usd is not None and normalized.cost_usd < 0:
-            raise AgentRegistryError("trace cost_usd cannot be negative")
-        self.get(normalized.agent_id, normalized.version)
+        if not normalized.run_id or len(normalized.run_id) > 128:
+            raise AgentRegistryError("trace run_id must be 1-128 characters")
+        if not normalized.agent_id or not normalized.version:
+            raise AgentRegistryError("trace agent_id and version are required")
+        if not _EVENT_TYPE.fullmatch(normalized.event_type):
+            raise AgentRegistryError("trace event_type has an invalid format")
+        for name, value in (
+            ("duration_ms", normalized.duration_ms),
+            ("input_tokens", normalized.input_tokens),
+            ("output_tokens", normalized.output_tokens),
+        ):
+            if value is not None and (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+            ):
+                raise AgentRegistryError(f"trace {name} must be a non-negative integer")
+        if normalized.cost_usd is not None:
+            try:
+                cost = Decimal(normalized.cost_usd)
+            except (InvalidOperation, TypeError, ValueError) as exc:
+                raise AgentRegistryError("trace cost_usd must be numeric") from exc
+            if not cost.is_finite() or cost < 0:
+                raise AgentRegistryError(
+                    "trace cost_usd must be finite and non-negative"
+                )
+        try:
+            payload_json = json.dumps(normalized.payload, sort_keys=True)
+        except (TypeError, ValueError) as exc:
+            raise AgentRegistryError(
+                "trace payload must be JSON serializable"
+            ) from exc
+        if len(payload_json.encode("utf-8")) > _MAX_TRACE_PAYLOAD_BYTES:
+            raise AgentRegistryError("trace payload exceeds the size limit")
+
         with self.store.connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            manifest = connection.execute(
+                """
+                SELECT 1 FROM agent_manifests
+                WHERE agent_id = ? AND version = ?
+                """,
+                (normalized.agent_id, normalized.version),
+            ).fetchone()
+            if manifest is None:
+                raise AgentRegistryError(
+                    f"agent not found: {normalized.agent_id}:{normalized.version}"
+                )
+            if normalized.parent_event_id:
+                parent = connection.execute(
+                    """
+                    SELECT run_id FROM agent_trace_events WHERE id = ?
+                    """,
+                    (normalized.parent_event_id,),
+                ).fetchone()
+                if parent is None:
+                    raise AgentRegistryError("trace parent_event_id was not found")
+                if parent["run_id"] != normalized.run_id:
+                    raise AgentRegistryError(
+                        "trace parent_event_id belongs to a different run"
+                    )
+            next_sequence = connection.execute(
+                """
+                SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_sequence
+                FROM agent_trace_events WHERE run_id = ?
+                """,
+                (normalized.run_id,),
+            ).fetchone()["next_sequence"]
+            stored = replace(
+                normalized,
+                sequence_number=int(next_sequence),
+            )
             connection.execute(
                 """
                 INSERT INTO agent_trace_events (
-                    id, run_id, agent_id, version, event_type, payload_json,
-                    duration_ms, cost_usd, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, run_id, sequence_number, parent_event_id,
+                    agent_id, version, event_type, payload_json, duration_ms,
+                    input_tokens, output_tokens, cost_usd, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    normalized.id,
-                    normalized.run_id,
-                    normalized.agent_id,
-                    normalized.version,
-                    normalized.event_type,
-                    json.dumps(normalized.payload, sort_keys=True),
-                    normalized.duration_ms,
-                    str(normalized.cost_usd)
-                    if normalized.cost_usd is not None
+                    stored.id,
+                    stored.run_id,
+                    stored.sequence_number,
+                    stored.parent_event_id,
+                    stored.agent_id,
+                    stored.version,
+                    stored.event_type,
+                    payload_json,
+                    stored.duration_ms,
+                    stored.input_tokens,
+                    stored.output_tokens,
+                    str(stored.cost_usd)
+                    if stored.cost_usd is not None
                     else None,
-                    normalized.created_at,
+                    stored.created_at,
                 ),
             )
-        return normalized
+        return stored
 
     def list_trace_events(self, run_id: str) -> tuple[TraceEvent, ...]:
         with self.store.connection() as connection:
             rows = connection.execute(
                 """
                 SELECT * FROM agent_trace_events
-                WHERE run_id = ? ORDER BY created_at, id
+                WHERE run_id = ?
+                ORDER BY sequence_number, created_at, id
                 """,
                 (run_id,),
             ).fetchall()
@@ -309,11 +445,15 @@ class AgentRegistry:
             TraceEvent(
                 id=row["id"],
                 run_id=row["run_id"],
+                sequence_number=row["sequence_number"],
+                parent_event_id=row["parent_event_id"],
                 agent_id=row["agent_id"],
                 version=row["version"],
                 event_type=row["event_type"],
                 payload=json.loads(row["payload_json"]),
                 duration_ms=row["duration_ms"],
+                input_tokens=row["input_tokens"],
+                output_tokens=row["output_tokens"],
                 cost_usd=Decimal(row["cost_usd"])
                 if row["cost_usd"] is not None
                 else None,
