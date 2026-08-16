@@ -204,11 +204,18 @@ def validate_status(status: dict[str, Any], catalog_phases: dict[str, dict[str, 
         raise ValidationError("default_active_phase_limit must be a positive integer")
     if len(active) > limit:
         raise ValidationError(f"Active phase limit exceeded: {active}")
-    if current_phase not in active:
-        raise ValidationError("current_phase must be the active phase")
 
     current = phase_statuses[current_phase]
-    if current.get("status") != program_status:
+    current_status = current.get("status")
+    if current_status in TERMINAL_PHASE_STATUSES:
+        if active:
+            raise ValidationError(
+                f"Terminal current phase {current_phase} cannot coexist with active phases: {active}"
+            )
+    elif current_phase not in active:
+        raise ValidationError("current_phase must be the active phase")
+
+    if current_status != program_status:
         raise ValidationError("Program status must match the current phase status")
     if current.get("branch") != catalog_phases[current_phase]["branch"]:
         raise ValidationError("Current phase branch does not match the phase catalog")
@@ -261,7 +268,7 @@ def validate_status(status: dict[str, Any], catalog_phases: dict[str, dict[str, 
     elif current.get("bootstrap_exception"):
         raise ValidationError("Only P00 may use a bootstrap exception")
 
-    if current["status"] == "ready_to_merge":
+    if current_status == "ready_to_merge":
         unsatisfied = [
             gate for gate in pre_merge_gates if gates[gate] not in SATISFIED_GATE_STATES
         ]
@@ -272,10 +279,10 @@ def validate_status(status: dict[str, Any], catalog_phases: dict[str, dict[str, 
         if current["risk"] == "CRITICAL" and not current["owner_release_approved"]:
             raise ValidationError("CRITICAL ready_to_merge requires owner release approval")
 
-    if current["status"] == "post_merge_verify" and gates["squash_merged"] != "passed":
+    if current_status == "post_merge_verify" and gates["squash_merged"] != "passed":
         raise ValidationError("post_merge_verify requires squash_merged=passed")
 
-    if current["status"] == "complete":
+    if current_status == "complete":
         unsatisfied = [
             gate for gate in required_gates if gates[gate] not in SATISFIED_GATE_STATES
         ]
