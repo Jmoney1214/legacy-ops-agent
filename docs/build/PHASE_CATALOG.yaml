@@ -346,7 +346,7 @@ phases:
     objective: Enable one exact, approval-bound external action at a time with idempotency, confirmation capture, replay protection, and post-action verification.
     deliverables:
       - Exact approval execution framework.
-      - Feature-flagged actions introduced individually: support email, vendor email, shipping label, campaign send, PO submission, dispute submission, price update, refund/credit.
+      - "Feature-flagged actions introduced individually: support email, vendor email, shipping label, campaign send, PO submission, dispute submission, price update, refund/credit."
       - Confirmation and independent verification for each enabled action.
     non_goals:
       - No blanket approvals.
