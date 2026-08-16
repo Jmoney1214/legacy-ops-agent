@@ -7,10 +7,12 @@
 - Base commit: `f096b1d533897b6c4d3b4e5c7e37d947b3a5cd40`
 - Phase branch: `phase/00-program-control`
 - Pull request: https://github.com/Jmoney1214/legacy-ops-agent/pull/7
-- Reviewed branch checkpoint: `7cb0dd1fb64e0f4d52d00cb2164dff0c2f3b02fb`
+- Initial internal reviewed checkpoint: `7cb0dd1fb64e0f4d52d00cb2164dff0c2f3b02fb`
+- Owner-appointed AI review submission: `4946476409`
+- AI review anchor: `d19ef38c6908a9687430ad198687de19b069b19b`
 - Review date: 2026-08-16 America/New_York
 
-This report records the P00 internal complete-diff review. Because adding this report and updating the live status create later commits, final exact-head CI and a final metadata recheck remain mandatory before the PR is marked ready for independent review.
+This report records the P00 internal complete-diff review and the owner-appointed AI technical review. GitHub required checks and submitted reviews on the current PR head are the authority for exact-head merge eligibility. Commit identifiers stored in repository files are historical evidence snapshots rather than self-referential current-head assertions.
 
 ## Changed areas reviewed
 
@@ -40,7 +42,7 @@ P00 is a governance, validation, documentation, and CI phase. It does not change
 
 ## Architecture review conclusion
 
-The branch now reflects the approved architecture:
+The branch reflects the approved architecture:
 
 - Supabase is the planned runtime command center.
 - GitHub governs code, migrations, tests, evaluations, reviews, and releases.
@@ -51,7 +53,7 @@ The branch now reflects the approved architecture:
 
 ## Debugging performed
 
-Two CI failures were reproduced from actual GitHub job logs and fixed:
+Three defects were identified from actual CI or review evidence and corrected:
 
 1. **Phase catalog YAML parse failure**
    - Root cause: an unquoted list item containing a colon in the P12 deliverables.
@@ -63,16 +65,27 @@ Two CI failures were reproduced from actual GitHub job logs and fixed:
    - Fix: allow the current phase to be terminal only when no other phase is active; retain dependency and gate enforcement.
    - Regression coverage: tests were added for current validity, N/A rationale, status alignment, invalid boolean gate values, ready-to-merge requirements, and complete-phase requirements.
 
-## CI evidence before final metadata commits
+3. **Stale self-referential review and CI evidence**
+   - Root cause: the live status and board embedded a previously successful PR head while later metadata commits necessarily changed the current head.
+   - Review finding: GitHub review `4946476409` required the machine-readable status and live board to stop presenting the historical SHA as the exact current-head authority.
+   - Fix: GitHub required checks on the current PR head are now the exact-head authority; repository files retain clearly labeled historical evidence snapshots. The live board no longer attempts to embed its own current commit SHA.
 
-At branch commit `948c4fef11793f80bda7345c0181b3c0885ffa23`, GitHub Actions run `31932154153` completed successfully with:
+## CI evidence
+
+Recorded successful runs include:
+
+- run `31932154153` at `948c4fef11793f80bda7345c0181b3c0885ffa23`;
+- run `31932626358` at `1d9b8fd6421cfb512eec37cb2eb1593fb9223685`;
+- run `31932766401` at `d19ef38c6908a9687430ad198687de19b069b19b`.
+
+Each recorded run completed successfully with:
 
 - Python 3.11 unit tests and source compilation;
 - Python 3.13 unit tests and source compilation;
 - build-control validator compile and execution;
 - Docker image build.
 
-Final exact-head CI must pass again after this report and status updates.
+The GitHub check suite on the current PR head must remain green before merge.
 
 ## Security, secret, and privacy review
 
@@ -86,23 +99,22 @@ The only mailbox values present are the intended business-address identifiers us
 
 - `not_applicable` is allowed only with a factual reason in `PHASE_STATUS.yaml`.
 - P00 records staging/deployed-runtime checks as not applicable because the phase does not alter runtime, data, permissions, or deployment configuration.
-- Python 3.11/3.13 tests, control validation, Docker build, full diff review, secret/PII review, independent review, merge authorization, squash merge, and post-merge `main` CI remain mandatory.
+- Python 3.11/3.13 tests, control validation, Docker build, full diff review, secret/PII review, review approval, merge authorization, squash merge, and post-merge `main` CI remain mandatory.
 - The one-time P00 bootstrap exception is explicitly prohibited for future phases.
+- Exact-head CI evidence is external GitHub check state; repository snapshots must not be treated as stronger than the current PR checks.
 
 ## Rollback
 
 P00 has no migration or external side effect. Rollback is a squash-merge revert of the P00 merge commit. The existing application runtime and data remain unchanged.
 
-## Internal review result
+## Review result
 
-No unresolved correctness, scope, data-integrity, permission, runtime, or side-effect defect was identified in the reviewed checkpoint after the documented fixes.
+The owner-appointed AI technical review found the stale evidence defect described above. The defect was addressed in the live status, board, and this report. No unresolved runtime, database, external-side-effect, credential, permission, or data-integrity defect was identified.
 
 ## Remaining gates
 
-- final exact-head GitHub CI;
-- automated Codex review when configured;
-- one independent human approval;
-- resolution of all review threads;
+- GitHub required checks green on the current PR head;
+- one independent human approval under the current P00 governance rule;
 - explicit merge authorization;
 - squash merge;
 - post-merge `main` CI;
