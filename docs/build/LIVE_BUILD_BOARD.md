@@ -11,6 +11,7 @@
 | Branch | `phase/00-program-control` |
 | Issue | https://github.com/Jmoney1214/legacy-ops-agent/issues/6 |
 | Pull request | https://github.com/Jmoney1214/legacy-ops-agent/pull/7 |
+| Pull request state | Ready for review |
 | Merge authorized | `false` |
 | Target P00 finish | 2026-08-19 |
 | Target limited launch | 2026-12-18 |
@@ -20,7 +21,7 @@
 ### Completed
 
 - [x] GitHub repository and current `main` inspected.
-- [x] Live P00 issue, branch, and draft PR created.
+- [x] Live P00 issue, branch, and pull request created.
 - [x] Existing runtime, Dockerfile, dependencies, and CI baseline recorded.
 - [x] Pull-request and phase-issue templates installed.
 - [x] Codex and Claude Code repository instructions installed.
@@ -30,22 +31,21 @@
 - [x] Root agent rules corrected for a full functional-head architecture and separate three-person strategic council.
 - [x] Automated build-control validator and regression tests added.
 - [x] CI expanded to validate the control pack and build the Docker image.
-- [x] Python 3.11 unit tests and source compilation passed at reviewed head `1d9b8fd6421cfb512eec37cb2eb1593fb9223685`.
-- [x] Python 3.13 unit tests and source compilation passed at the same head.
-- [x] Build-control validation passed at the same head.
-- [x] Docker image build passed at the same head.
+- [x] Python 3.11 and 3.13 tests and source compilation passed on recorded reviewed heads.
+- [x] Build-control validation and Docker image build passed on recorded reviewed heads.
 - [x] Complete PR diff and architecture/scope review recorded in `reports/P00_REVIEW_REPORT.md`.
 - [x] Secret, credential, customer-data, payment-data, private-mail, and production-evidence review recorded clean.
 - [x] P00 rollback defined as a squash-merge revert; no data or external side effect exists.
+- [x] Owner-appointed AI technical review submitted as GitHub review `4946476409`.
+- [x] AI review findings about stale CI/status evidence were addressed.
+- [x] PR marked ready for review.
+- [x] No inline review thread is open.
 
-### Open gates
+### Current merge gates
 
-- [ ] Final exact-head CI after the status and board evidence commits.
-- [ ] Automated Codex review requested and completed when configured.
+- [ ] GitHub required checks must be green on the current PR head. The PR check suite—not a self-referential SHA inside this file—is the exact-head authority.
 - [ ] One independent human approval.
-- [ ] Every review thread resolved.
-- [ ] Merge authorization recorded.
-- [ ] PR marked ready for review.
+- [ ] Explicit merge authorization.
 - [ ] Squash merge.
 - [ ] Post-merge `main` CI.
 - [ ] Deployed-runtime verification: `N/A` for P00 because runtime, data, permissions, and deployment configuration are unchanged.
@@ -81,4 +81,4 @@
 
 ## Update rule
 
-The machine-readable authority is `docs/build/PHASE_STATUS.yaml`. This board is updated after every meaningful phase transition, CI result, review outcome, merge, or post-merge verification. A phase is complete only after `main` CI and every applicable deployed verification pass; a non-runtime gate may be `N/A` only with a factual recorded reason.
+The machine-readable authority is `docs/build/PHASE_STATUS.yaml`. GitHub required checks and submitted reviews are the authority for the exact current PR head. This board records the latest reviewed program state without attempting to embed its own commit SHA. A phase is complete only after `main` CI and every applicable deployed verification pass; a non-runtime gate may be `N/A` only with a factual recorded reason.
