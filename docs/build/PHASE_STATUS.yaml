@@ -103,8 +103,18 @@ phases:
       scope: P00 only
       future_phases_permitted: false
       reason: P00 was bootstrapped through the GitHub connector before the repository control protocol existed; the phase changes governance, documentation, validation, and CI only, and the exact branch head is validated by GitHub CI.
+    verification_evidence:
+      reviewed_checkpoint: 7cb0dd1fb64e0f4d52d00cb2164dff0c2f3b02fb
+      review_report: docs/build/reports/P00_REVIEW_REPORT.md
+      successful_ci_head: 1d9b8fd6421cfb512eec37cb2eb1593fb9223685
+      successful_ci_run: 31932626358
+      successful_ci_jobs:
+        - Python 3.11 unit tests and source compilation
+        - Python 3.13 unit tests and source compilation
+        - Build-control validator compile and execution
+        - Docker image build
     blockers:
-      - Final complete-diff review, automated review, one independent human approval, review-thread resolution, and merge authorization remain open.
+      - Automated review, one independent human approval, review-thread resolution, and merge authorization remain open.
     gate_exceptions:
       full_local_verification: The P00 bootstrap used GitHub API writes before the local-first protocol existed; the exact complete branch is validated by Python 3.11/3.13 CI, build-control validation, and Docker build. No future phase may reuse this exception.
       staging_deployed: P00 changes repository governance and CI only; no application runtime, database, permission, or deployment configuration changes require a staging deployment.
@@ -117,8 +127,8 @@ phases:
       targeted_tests: passed
       full_local_verification: not_applicable
       debugging_complete: passed
-      pre_push_diff_review: pending
-      secret_pii_scan: pending
+      pre_push_diff_review: passed
+      secret_pii_scan: passed
       branch_pushed: passed
       pull_request_open: passed
       ci_green: passed
