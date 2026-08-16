@@ -6,10 +6,10 @@ This directory is the durable program record for the phased Legacy Wine & Liquor
 
 - `MASTER_BUILD_SCHEDULE.md` — live reforecast, milestones, risk classes, and phase timing.
 - `PHASE_CATALOG.yaml` — machine-readable P00–P15 contracts, dependencies, deliverables, non-goals, tests, and exit criteria.
-- `PHASE_STATUS.yaml` — current phase, gates, blockers, and merge authorization.
+- `PHASE_STATUS.yaml` — current phase, gates, blockers, exceptions, and merge authorization.
 - `CODEX_EXECUTION_PROTOCOL.md` — mandatory implementation, debugging, pre-push, review, merge, and post-merge process.
 - `LIVE_BUILD_BOARD.md` — human-readable current progress and open gates.
-- `reports/` — factual baseline, start, completion, and verification reports.
+- `reports/` — factual baseline, start, review, completion, and verification reports.
 
 Repository-wide instructions remain in `AGENTS.md`, `CLAUDE.md`, and `CODEX_MASTER_PROMPT.md`.
 
@@ -27,16 +27,17 @@ Repository-wide instructions remain in `AGENTS.md`, `CLAUDE.md`, and `CODEX_MAST
 1. Work only the current phase.
 2. One phase branch and one pull request at a time by default.
 3. Do not push a knowingly broken checkpoint.
-4. Debug every required failure before another push.
+4. Debug every applicable failure before another push.
 5. Review the entire diff before every push.
-6. Never merge around failed, pending, skipped, or unresolved required checks.
-7. Require independent review, staging evidence, rollback, and explicit merge authorization.
-8. Use squash merge only.
-9. A phase is complete only after post-merge `main` and deployed verification.
+6. Never merge around failed, pending, skipped, neutral, or unresolved applicable checks.
+7. A gate may be `not_applicable` only when `PHASE_STATUS.yaml` records a factual reason; it is not a bypass.
+8. Require independent review, applicable staging evidence or a recorded `not_applicable` rationale, rollback, and explicit merge authorization.
+9. Use squash merge only.
+10. A phase is complete only after `main` CI and every applicable deployed verification pass.
 
 ## P00
 
-P00 establishes the control plane for the build itself. It changes no production data, runtime permission, mailbox access, or agent behavior.
+P00 establishes the control plane for the build itself. It changes no production data, runtime permission, mailbox access, or agent behavior. Its staging and deployed-runtime gates are therefore recorded as `not_applicable` with factual reasons; Python 3.11/3.13 tests, build-control validation, Docker build, full diff review, independent review, and post-merge `main` CI remain mandatory.
 
 Live tracking:
 
