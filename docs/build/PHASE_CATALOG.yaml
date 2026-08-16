@@ -1,0 +1,440 @@
+schema_version: "1.0"
+program: legacy-wine-liquor-agentic-business-os
+repository: Jmoney1214/legacy-ops-agent
+
+phases:
+  P00:
+    title: Program control and repository baseline
+    target_start: "2026-08-17"
+    target_end: "2026-08-19"
+    workdays: 3
+    branch: phase/00-program-control
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: []
+    objective: Establish the live build-control system, repository baseline, verification commands, review rules, and release governance before additional runtime work.
+    deliverables:
+      - Factual repository inventory and technical baseline.
+      - Master schedule, phase catalog, live status, execution protocol, and build board.
+      - GitHub issue and pull-request templates.
+      - Codex and Claude Code repository instructions.
+      - Automated validation of the build-control artifacts.
+      - CI coverage for build-control validation and Docker build.
+    non_goals:
+      - No production database change.
+      - No runtime agent behavior change.
+      - No Outlook permission or external side effect.
+    required_verification:
+      - Existing unit tests pass on Python 3.11 and 3.13.
+      - Source compilation passes.
+      - Build-control validator passes.
+      - Docker image builds.
+      - Full PR diff and secret/PII review are complete.
+    exit_criteria:
+      - All P00 control files are present and internally consistent.
+      - PR has required independent approval and no unresolved thread.
+      - Squash merge and post-merge main verification pass.
+
+  P01:
+    title: Supabase security and command-center foundation
+    target_start: "2026-08-20"
+    target_end: "2026-09-02"
+    workdays: 10
+    branch: phase/01-supabase-command-center
+    risk: HIGH
+    required_independent_reviews: 2
+    dependencies: [P00]
+    objective: Make Supabase the secure durable runtime source of truth for tasks, queues, evidence, approvals, runs, audit, governed memory, and outcomes.
+    deliverables:
+      - Separate staging project and verified backup/export before destructive work.
+      - Versioned migration history and schema boundaries for ops, integration, business, and accounting.
+      - Task, run, evidence, approval, execution, idempotency, outcome, audit, and governed-memory tables.
+      - Supabase Queues/PGMQ queues and dead-letter handling.
+      - RLS and grants for owner dashboard, web API, worker, maintenance, and reporting roles.
+      - Removal of credentials from browser-exposed schemas.
+    non_goals:
+      - No live OpenAI agent calls.
+      - No Outlook integration.
+      - No production migration without owner approval.
+      - No external side effects.
+    required_verification:
+      - Full staging reset from migrations.
+      - RLS tests for every role and anonymous denial.
+      - Forward and rollback migration rehearsal.
+      - Pre/post row-count and integrity reconciliation.
+      - Queue retry, visibility, archive, and dead-letter tests.
+      - Secret and service-role exposure scan.
+    exit_criteria:
+      - Sensitive operational tables are not anonymously readable or writable.
+      - Staging is reproducible from migrations.
+      - Backup and rollback evidence are approved.
+
+  P02:
+    title: Web, worker, and maintenance runtime split
+    target_start: "2026-09-03"
+    target_end: "2026-09-11"
+    workdays: 7
+    branch: phase/02-runtime-split
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: [P01]
+    objective: Separate request handling, durable background work, and scheduled maintenance so long workflows never run inside HTTP requests.
+    deliverables:
+      - Independent web, worker, and maintenance entrypoints.
+      - Typed configuration, readiness/liveness, heartbeats, graceful shutdown, and request IDs.
+      - Durable job leasing, visibility timeout, retries, and dead-letter routing.
+    non_goals:
+      - No complex head agents.
+      - No external mutation tools.
+      - No mailbox send.
+    required_verification:
+      - Long work is not executed in HTTP handlers.
+      - Tasks survive worker restart.
+      - Duplicate queue delivery does not duplicate internal work.
+      - Missing production configuration fails readiness closed.
+      - All three services start independently.
+    exit_criteria:
+      - Runtime state persists outside process memory.
+      - Web, worker, and maintenance health are independently observable.
+
+  P03:
+    title: Tool registry, evidence compiler, and read-only adapters
+    target_start: "2026-09-14"
+    target_end: "2026-09-23"
+    workdays: 8
+    branch: phase/03-tools-evidence
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: [P02]
+    objective: Establish typed, risk-scored tools and immutable source-linked evidence packets while keeping production tools read-only.
+    deliverables:
+      - Central tool registry with owner, version, risk, side-effect, auth, approval, timeout, retry, redaction, and idempotency metadata.
+      - Immutable EvidencePacket and EvidenceItem contracts.
+      - Read-only wrappers for Lightspeed, reconciliation, chargebacks, inventory, vendors, and approved business data.
+      - Policy gate blocking unregistered or unauthorized tools.
+    non_goals:
+      - No send, refund, purchase-order submission, inventory adjustment, or price update tool.
+    required_verification:
+      - Invalid schemas fail closed.
+      - Fabricated evidence IDs are rejected.
+      - Ambiguous matches remain ambiguous.
+      - Stale data, timeout, rate limit, and connector failure are explicit.
+      - Prompt injection cannot grant authority.
+      - Sensitive fields are redacted.
+    exit_criteria:
+      - Every material agent claim can reference valid evidence.
+      - No write-capable production tool is registered.
+
+  P04:
+    title: Dashboard shell and durable approvals
+    target_start: "2026-09-24"
+    target_end: "2026-09-30"
+    workdays: 5
+    branch: phase/04-dashboard-approvals
+    risk: HIGH
+    required_independent_reviews: 2
+    dependencies: [P03]
+    objective: Deliver the authenticated owner dashboard shell and exact, durable, resumable approval controls before any live side effect exists.
+    deliverables:
+      - Owner authentication and role checks.
+      - Task, run, evidence, draft, approval, audit, and health views.
+      - Exact approval binding to tool, normalized arguments, requester, approver, version, expiration, and idempotency key.
+      - Rejection, expiry, invalidation, and restart-safe resume paths.
+    non_goals:
+      - No external action execution.
+      - No public anonymous command-center access.
+    required_verification:
+      - Authorization, RLS, CSRF, session, and reauthentication tests.
+      - Self-approval, expired approval, and modified-argument replay are rejected.
+      - Approval state survives worker restart.
+    exit_criteria:
+      - Owner can inspect evidence and decide an exact action without exposing service credentials.
+
+  P05:
+    title: Marketplace reconciliation vertical slice
+    target_start: "2026-10-01"
+    target_end: "2026-10-07"
+    workdays: 5
+    branch: phase/05-marketplace-reconciliation
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: [P04]
+    objective: Move the existing Uber Eats and DoorDash versus Lightspeed reconciliation workflow into the Supabase command center end to end.
+    deliverables:
+      - Scheduled weekly audit.
+      - Deterministic matching and arithmetic reused from existing services.
+      - Reconciliation runs, lines, evidence, exceptions, audit, and outcomes.
+      - CFO summary and owner exception report.
+    non_goals:
+      - No bank mutation.
+      - No marketplace claim submission.
+    required_verification:
+      - Missing, duplicate, refunded, timing, fee, and amount mismatch fixtures.
+      - Every variance is reproducible from stored records.
+      - Re-running the same settlement window is idempotent.
+    exit_criteria:
+      - Scheduled staging run completes from source retrieval through owner report.
+
+  P06:
+    title: Chargeback and dispute vertical slice
+    target_start: "2026-10-08"
+    target_end: "2026-10-15"
+    workdays: 6
+    branch: phase/06-chargebacks
+    risk: HIGH
+    required_independent_reviews: 2
+    dependencies: [P05]
+    objective: Create a complete approval-gated dispute workflow from notice intake through deterministic sale matching, evidence planning, response drafting, and dry-run submission.
+    deliverables:
+      - Dispute task, deadline, notice, deterministic match, evidence plan, draft, approval, and preview.
+      - Existing chargeback service retained as deterministic authority.
+      - Owner case-status and evidence-completeness view.
+    non_goals:
+      - No live submission before P12 authorization.
+    required_verification:
+      - Strong, weak, ambiguous, and missing transaction matches.
+      - Unsupported statements are blocked.
+      - Deadline and evidence failures are explicit.
+      - Approval replay and duplicate submission are blocked.
+    exit_criteria:
+      - One staging dispute completes through approved dry-run preview with full audit trail.
+
+  P07:
+    title: Inventory, purchase order, and receiving vertical slice
+    target_start: "2026-10-16"
+    target_end: "2026-10-27"
+    workdays: 8
+    branch: phase/07-inventory-po-receiving
+    risk: HIGH
+    required_independent_reviews: 2
+    dependencies: [P06]
+    objective: Build low-stock monitoring, evidence-backed reorder recommendations, draft purchase orders, receiving comparison, and variance reporting without autonomous submission.
+    deliverables:
+      - Low-stock and dead-stock monitors.
+      - Sales velocity, open PO, vendor cost, case-pack, lead-time, and restock-interest evidence.
+      - Draft PO and owner approval workflow.
+      - Receiving comparison for overage, shortage, substitution, freight, credit, and inventory preview.
+      - Initial Chief Inventory and Procurement Agent package and evals.
+    non_goals:
+      - No automatic PO submission.
+      - No automatic inventory adjustment.
+      - No automatic price change.
+    required_verification:
+      - Ambiguous case pack and unit conversion.
+      - Duplicate PO prevention and open-PO awareness.
+      - Receiving variance scenarios.
+      - Deterministic money and quantity calculations.
+    exit_criteria:
+      - One staging PO completes through draft, approval, receiving, and variance reconciliation.
+
+  P08:
+    title: Outlook support mailbox read-only intake
+    target_start: "2026-10-28"
+    target_end: "2026-11-06"
+    workdays: 8
+    branch: phase/08-outlook-read
+    risk: HIGH
+    required_independent_reviews: 2
+    dependencies: [P07]
+    objective: Connect the public support mailbox through Microsoft Graph for read-only intake, notifications, delta recovery, classification, tasks, and drafts.
+    deliverables:
+      - Verified Exchange recipient type and mailbox topology.
+      - Entra application and mailbox-scoped Exchange application permissions.
+      - Graph webhook, lifecycle notifications, renewal, delta cursors, deduplication, and attachment controls.
+      - Support classification, task creation, and response drafts.
+    non_goals:
+      - No Mail.Send.
+      - No broad owner-mailbox ingestion.
+      - No refund or credit execution.
+    required_verification:
+      - Webhook validation and fast acknowledgement.
+      - Duplicate notification handling and delta recovery.
+      - Malicious HTML and prompt injection.
+      - Cross-mailbox access denied.
+      - Mail.Send permission absent.
+    exit_criteria:
+      - Real staging messages create deduplicated tasks and drafts without send authority.
+
+  P09:
+    title: Executive router and core head agents
+    target_start: "2026-11-09"
+    target_end: "2026-11-18"
+    workdays: 8
+    branch: phase/09-core-head-agents
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: [P08]
+    objective: Activate deterministic routing and the first functional head agents in read-only recommendation mode.
+    deliverables:
+      - Chief of Staff, CFO, COO, Inventory/Procurement, Customer Experience, E-commerce/Marketplace, Data/Technology, and Compliance/Risk agents.
+      - Minimum-panel routing matrix.
+      - Independent parallel opinions, structured schemas, reviewer, incomplete-panel handling, daily brief, and weekly review.
+    non_goals:
+      - No free-form all-agent group chat.
+      - No routine invocation of every head.
+      - No side-effect authority.
+    required_verification:
+      - Required heads cannot be skipped.
+      - One head failure returns INCOMPLETE.
+      - Heads receive the same frozen evidence packet.
+      - Raw opinions remain unchanged.
+      - Cost and latency budgets are enforced.
+    exit_criteria:
+      - Selected staging business cases route to the correct minimum panel and produce evidence-linked outputs.
+
+  P10:
+    title: Growth, marketing, sales, pricing, and supplier heads
+    target_start: "2026-11-19"
+    target_end: "2026-11-25"
+    workdays: 5
+    branch: phase/10-commercial-heads
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: [P09]
+    objective: Add the commercial leadership agents and draft-only marketplace, marketing, pricing, sales, and supplier workflows.
+    deliverables:
+      - Marketing/CRM, Category/Pricing/Promotions, Sales/Channel, and Vendor/Supplier Relations agents.
+      - Flaviar and marketplace listing audit, feed health, price checks, order-decline analysis, segmentation, campaign drafts, promotion scenarios, and supplier scorecards.
+    non_goals:
+      - No automatic campaign publication.
+      - No autonomous vendor commitment.
+      - No autonomous price update.
+    required_verification:
+      - Out-of-stock campaign prevention.
+      - Margin guard and discount boundaries.
+      - Consent and unsubscribe handling.
+      - Vendor claim conflict and stale listing scenarios.
+      - Campaign ROI is deterministic.
+    exit_criteria:
+      - Commercial workflows produce reviewable drafts and recommendations with evidence and no live mutation.
+
+  P11:
+    title: Fulfillment, events, people, and expanded compliance heads
+    target_start: "2026-11-26"
+    target_end: "2026-12-01"
+    workdays: 4
+    branch: phase/11-support-heads
+    risk: HIGH
+    required_independent_reviews: 2
+    dependencies: [P10]
+    objective: Add fulfillment/shipping, events/partnerships, people/administration, and full compliance routing with versioned policy sources.
+    deliverables:
+      - Fulfillment/Shipping, Events/Partnerships, People/Administration, and expanded Compliance/Risk agents.
+      - Versioned jurisdiction and shipping policy registry.
+      - Shipping eligibility, carrier exception, adult-signature, event intake, quantity, proposal, staffing, margin, training, and reminder workflows.
+    non_goals:
+      - No model-generated legal rule.
+      - No autonomous hiring, firing, discipline, or compliance-policy change.
+    required_verification:
+      - Blocked-state and policy-version checks.
+      - Adult-signature enforcement.
+      - Event quantity and margin calculations.
+      - Missing legal source blocks execution.
+      - Employment-sensitive actions remain human-only.
+    exit_criteria:
+      - All new head workflows operate in read-only or draft mode with policy provenance.
+
+  P12:
+    title: External-action control plane and first approved actions
+    target_start: "2026-12-02"
+    target_end: "2026-12-08"
+    workdays: 5
+    branch: phase/12-controlled-actions
+    risk: CRITICAL
+    required_independent_reviews: 2
+    dependencies: [P11]
+    objective: Enable one exact, approval-bound external action at a time with idempotency, confirmation capture, replay protection, and post-action verification.
+    deliverables:
+      - Exact approval execution framework.
+      - "Feature-flagged actions introduced individually: support email, vendor email, shipping label, campaign send, PO submission, dispute submission, price update, refund/credit."
+      - Confirmation and independent verification for each enabled action.
+    non_goals:
+      - No blanket approvals.
+      - No unreviewed autonomous financial or regulated action.
+      - No simultaneous enablement without separate evidence.
+    required_verification:
+      - Self-approval and expired approval rejected.
+      - Material argument change invalidates approval.
+      - External success followed by worker failure cannot duplicate execution.
+      - Confirmation and audit are atomic.
+      - Emergency disable and rollback are tested.
+    exit_criteria:
+      - Only owner-approved allowlisted actions are enabled and every effect is idempotent and externally verified.
+
+  P13:
+    title: Strategic advisory council
+    target_start: "2026-12-09"
+    target_end: "2026-12-11"
+    workdays: 3
+    branch: phase/13-strategic-council
+    risk: STANDARD
+    required_independent_reviews: 1
+    dependencies: [P12]
+    objective: Add three source-backed read-only strategic advisors after their exact names and approved public sources are supplied.
+    deliverables:
+      - Three versioned source-backed profiles.
+      - Same frozen evidence packet, independent opinions, dissent display, and strategy-only routing.
+      - Profile source registry and limitations.
+    non_goals:
+      - No impersonation or claim of representing the real person.
+      - No fabricated quotation or private belief.
+      - No operational tool.
+    required_verification:
+      - Unsupported questions return insufficient evidence.
+      - No fake quotation or identity claim.
+      - No side-effect or operational tool access.
+    exit_criteria:
+      - Approved strategic cases show independent evidence-linked opinions and visible dissent.
+
+  P14:
+    title: Staged pilot, security hardening, and rollback drills
+    target_start: "2026-12-14"
+    target_end: "2026-12-17"
+    workdays: 4
+    branch: phase/14-pilot-hardening
+    risk: CRITICAL
+    required_independent_reviews: 2
+    dependencies: [P13]
+    objective: Run shadow and approval-only pilots, harden security, verify recovery, and produce a factual production go/no-go package.
+    deliverables:
+      - Shadow-mode and approval-only pilot.
+      - End-to-end security, load, privacy, retention, restore, rollback, and incident drills.
+      - Pilot metrics for accuracy, acceptance, latency, cost, queue age, failures, and outcomes.
+      - Go/no-go report and operating runbooks.
+    non_goals:
+      - No automatic permission expansion.
+      - No launch with unresolved critical finding.
+    required_verification:
+      - Every completed vertical slice passes staging end to end.
+      - Backup restore and deployment rollback are rehearsed.
+      - Security findings are resolved or explicitly block launch.
+      - Pilot thresholds and owner acceptance are recorded.
+    exit_criteria:
+      - Owner-approved go/no-go report confirms restricted launch readiness and rollback capability.
+
+  P15:
+    title: Production launch and operating handoff
+    target_start: "2026-12-18"
+    target_end: "2026-12-18"
+    workdays: 1
+    branch: phase/15-production-handoff
+    risk: CRITICAL
+    required_independent_reviews: 2
+    dependencies: [P14]
+    objective: Perform a limited production launch, verify the exact deployed revision, and hand off operating ownership with monitoring and rollback active.
+    deliverables:
+      - Owner-approved release record.
+      - Production migration and deployment using the verified staging artifact.
+      - Restricted allowlist and emergency disable controls.
+      - Post-launch smoke, monitoring, audit, and operating handoff.
+    non_goals:
+      - No broad autonomous rollout.
+      - No permission expansion beyond the approved allowlist.
+    required_verification:
+      - Production points to the approved SHA.
+      - Main and deployment checks are green.
+      - Queue, web, worker, maintenance, and connector health are verified.
+      - No duplicate or unauthorized effect occurs.
+      - Rollback remains immediately available.
+    exit_criteria:
+      - Owner accepts the operating handoff and the restricted production system remains healthy through the launch window.

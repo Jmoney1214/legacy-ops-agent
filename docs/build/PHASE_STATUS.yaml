@@ -1,0 +1,163 @@
+schema_version: "1.1"
+program:
+  id: legacy-wine-liquor-agentic-business-os
+  repository: Jmoney1214/legacy-ops-agent
+  current_phase: P00
+  status: ci_review
+  program_start: "2026-08-16"
+  target_limited_production_launch: "2026-12-18"
+  merge_method: squash
+  default_active_phase_limit: 1
+  merge_authorized: false
+
+allowed_statuses:
+  - planned
+  - ready
+  - in_progress
+  - local_verify
+  - pre_push_review
+  - pr_draft
+  - ci_review
+  - staging_verify
+  - ready_to_merge
+  - post_merge_verify
+  - complete
+  - blocked_clarification
+  - blocked_credential
+  - blocked_external_admin
+  - blocked_test_failure
+  - blocked_security
+  - blocked_review
+  - blocked_staging
+  - cancelled
+
+gate_states:
+  - pending
+  - passed
+  - failed
+  - blocked
+  - not_applicable
+
+pre_merge_gates:
+  - phase_contract
+  - implementation
+  - targeted_tests
+  - full_local_verification
+  - debugging_complete
+  - pre_push_diff_review
+  - secret_pii_scan
+  - branch_pushed
+  - pull_request_open
+  - ci_green
+  - automated_review_complete
+  - human_reviews_complete
+  - review_threads_resolved
+  - staging_deployed
+  - staging_smoke_green
+  - rollback_verified
+
+post_merge_gates:
+  - squash_merged
+  - main_ci_green
+  - post_merge_staging_green
+  - completion_report
+
+required_gates:
+  - phase_contract
+  - implementation
+  - targeted_tests
+  - full_local_verification
+  - debugging_complete
+  - pre_push_diff_review
+  - secret_pii_scan
+  - branch_pushed
+  - pull_request_open
+  - ci_green
+  - automated_review_complete
+  - human_reviews_complete
+  - review_threads_resolved
+  - staging_deployed
+  - staging_smoke_green
+  - rollback_verified
+  - squash_merged
+  - main_ci_green
+  - post_merge_staging_green
+  - completion_report
+
+phases:
+  P00:
+    status: ci_review
+    planned_start: "2026-08-17"
+    planned_end: "2026-08-19"
+    actual_start: "2026-08-16"
+    base_commit: f096b1d533897b6c4d3b4e5c7e37d947b3a5cd40
+    branch: phase/00-program-control
+    issue_url: https://github.com/Jmoney1214/legacy-ops-agent/issues/6
+    pull_request_url: https://github.com/Jmoney1214/legacy-ops-agent/pull/7
+    risk: STANDARD
+    required_independent_reviews: 1
+    merge_authorized: false
+    owner_release_approved: false
+    bootstrap_exception:
+      active: true
+      scope: P00 only
+      future_phases_permitted: false
+      reason: P00 was bootstrapped through the GitHub connector before the repository control protocol existed; the phase changes governance, documentation, validation, and CI only, and the branch is validated by GitHub CI.
+    verification_evidence:
+      internal_review_report: docs/build/reports/P00_REVIEW_REPORT.md
+      ai_review_submission_id: 4946476409
+      ai_reviewed_head: d19ef38c6908a9687430ad198687de19b069b19b
+      ci_evidence_authority: GitHub required checks on the current pull-request head
+      last_recorded_successful_ci_head: d19ef38c6908a9687430ad198687de19b069b19b
+      last_recorded_successful_ci_run: 31932766401
+      last_recorded_successful_ci_jobs:
+        - Python 3.11 unit tests and source compilation
+        - Python 3.13 unit tests and source compilation
+        - Build-control validator compile and execution
+        - Docker image build
+      snapshot_note: Commit and CI identifiers in this file are historical evidence snapshots. The GitHub check suite on the current PR head is authoritative for exact-head merge eligibility.
+    blockers:
+      - One independent human approval and explicit merge authorization remain open.
+    gate_exceptions:
+      full_local_verification: The P00 bootstrap used GitHub API writes before the local-first protocol existed; the complete branch is validated by Python 3.11/3.13 CI, build-control validation, and Docker build. No future phase may reuse this exception.
+      staging_deployed: P00 changes repository governance and CI only; no application runtime, database, permission, or deployment configuration changes require a staging deployment.
+      staging_smoke_green: No deployed application behavior changes in P00; CI and Docker build are the applicable execution checks.
+      post_merge_staging_green: P00 does not change deployed application behavior; post-merge main CI is the applicable verification.
+    rollback_evidence: A squash-merge revert removes the P00 governance and CI changes without a data migration or external side effect.
+    gates:
+      phase_contract: passed
+      implementation: passed
+      targeted_tests: passed
+      full_local_verification: not_applicable
+      debugging_complete: passed
+      pre_push_diff_review: passed
+      secret_pii_scan: passed
+      branch_pushed: passed
+      pull_request_open: passed
+      ci_green: passed
+      automated_review_complete: passed
+      human_reviews_complete: pending
+      review_threads_resolved: passed
+      staging_deployed: not_applicable
+      staging_smoke_green: not_applicable
+      rollback_verified: passed
+      squash_merged: pending
+      main_ci_green: pending
+      post_merge_staging_green: not_applicable
+      completion_report: pending
+
+  P01: {status: planned}
+  P02: {status: planned}
+  P03: {status: planned}
+  P04: {status: planned}
+  P05: {status: planned}
+  P06: {status: planned}
+  P07: {status: planned}
+  P08: {status: planned}
+  P09: {status: planned}
+  P10: {status: planned}
+  P11: {status: planned}
+  P12: {status: planned}
+  P13: {status: planned}
+  P14: {status: planned}
+  P15: {status: planned}
