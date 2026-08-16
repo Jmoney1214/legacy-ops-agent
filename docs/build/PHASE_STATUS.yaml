@@ -1,0 +1,109 @@
+schema_version: "1.0"
+program:
+  id: legacy-wine-liquor-agentic-business-os
+  repository: Jmoney1214/legacy-ops-agent
+  current_phase: P00
+  status: pr_draft
+  program_start: "2026-08-16"
+  target_limited_production_launch: "2026-12-18"
+  merge_method: squash
+  default_active_phase_limit: 1
+  merge_authorized: false
+
+allowed_statuses:
+  - planned
+  - ready
+  - in_progress
+  - local_verify
+  - pre_push_review
+  - pr_draft
+  - ci_review
+  - staging_verify
+  - ready_to_merge
+  - post_merge_verify
+  - complete
+  - blocked_clarification
+  - blocked_credential
+  - blocked_external_admin
+  - blocked_test_failure
+  - blocked_security
+  - blocked_review
+  - blocked_staging
+  - cancelled
+
+required_gates:
+  - phase_contract
+  - implementation
+  - targeted_tests
+  - full_local_verification
+  - debugging_complete
+  - pre_push_diff_review
+  - secret_pii_scan
+  - branch_pushed
+  - pull_request_open
+  - ci_green
+  - automated_review_complete
+  - human_reviews_complete
+  - review_threads_resolved
+  - staging_deployed
+  - staging_smoke_green
+  - rollback_verified
+  - merge_authorized
+  - squash_merged
+  - main_ci_green
+  - post_merge_staging_green
+  - completion_report
+
+phases:
+  P00:
+    status: pr_draft
+    planned_start: "2026-08-17"
+    planned_end: "2026-08-19"
+    actual_start: "2026-08-16"
+    base_commit: f096b1d533897b6c4d3b4e5c7e37d947b3a5cd40
+    branch: phase/00-program-control
+    issue_url: https://github.com/Jmoney1214/legacy-ops-agent/issues/6
+    pull_request_url: https://github.com/Jmoney1214/legacy-ops-agent/pull/7
+    risk: STANDARD
+    required_independent_reviews: 1
+    owner_release_approved: false
+    blockers:
+      - Full P00 control set, final CI, complete diff review, and independent review remain open.
+    gates:
+      phase_contract: true
+      implementation: false
+      targeted_tests: true
+      full_local_verification: false
+      debugging_complete: false
+      pre_push_diff_review: false
+      secret_pii_scan: true
+      branch_pushed: true
+      pull_request_open: true
+      ci_green: false
+      automated_review_complete: false
+      human_reviews_complete: false
+      review_threads_resolved: false
+      staging_deployed: false
+      staging_smoke_green: false
+      rollback_verified: true
+      merge_authorized: false
+      squash_merged: false
+      main_ci_green: false
+      post_merge_staging_green: false
+      completion_report: false
+
+  P01: {status: planned}
+  P02: {status: planned}
+  P03: {status: planned}
+  P04: {status: planned}
+  P05: {status: planned}
+  P06: {status: planned}
+  P07: {status: planned}
+  P08: {status: planned}
+  P09: {status: planned}
+  P10: {status: planned}
+  P11: {status: planned}
+  P12: {status: planned}
+  P13: {status: planned}
+  P14: {status: planned}
+  P15: {status: planned}
