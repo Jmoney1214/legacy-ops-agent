@@ -23,6 +23,7 @@ REQUIRED_FILES = [
     BUILD / "README.md",
     BUILD / "MASTER_BUILD_SCHEDULE.md",
     BUILD / "CODEX_EXECUTION_PROTOCOL.md",
+    BUILD / "LIVE_BUILD_BOARD.md",
     CATALOG_PATH,
     STATUS_PATH,
     BUILD / "reports" / "P00_REPOSITORY_BASELINE.md",
@@ -32,6 +33,8 @@ REQUIRED_FILES = [
 EXPECTED_PHASE_IDS = [f"P{i:02d}" for i in range(16)]
 VALID_RISKS = {"STANDARD", "HIGH", "CRITICAL"}
 MIN_REVIEWS = {"STANDARD": 1, "HIGH": 2, "CRITICAL": 2}
+TERMINAL_PHASE_STATUSES = {"planned", "complete", "cancelled"}
+SATISFIED_GATE_STATES = {"passed", "not_applicable"}
 
 
 class ValidationError(RuntimeError):
@@ -55,6 +58,16 @@ def parse_date(value: Any, label: str) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise ValidationError(f"{label} is not a valid ISO date: {value}") from exc
+
+
+def require_unique_string_list(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ValidationError(f"{label} must be a non-empty list")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValidationError(f"{label} must contain only non-empty strings")
+    if len(value) != len(set(value)):
+        raise ValidationError(f"{label} contains duplicates")
+    return value
 
 
 def validate_required_files() -> None:
@@ -101,7 +114,7 @@ def validate_catalog(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
         end = parse_date(phase["target_end"], f"{phase_id}.target_end")
         if start > end:
             raise ValidationError(f"{phase_id} starts after it ends")
-        if previous_end is not None and start < previous_end:
+        if previous_end is not None and start <= previous_end:
             raise ValidationError(f"{phase_id} overlaps the prior phase schedule")
         previous_end = end
 
@@ -139,11 +152,7 @@ def validate_catalog(catalog: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "required_verification",
             "exit_criteria",
         ):
-            value = phase[list_field]
-            if not isinstance(value, list) or not value or not all(
-                isinstance(item, str) and item.strip() for item in value
-            ):
-                raise ValidationError(f"{phase_id}.{list_field} must be a non-empty string list")
+            require_unique_string_list(phase[list_field], f"{phase_id}.{list_field}")
 
     return phases
 
@@ -157,18 +166,22 @@ def validate_status(status: dict[str, Any], catalog_phases: dict[str, dict[str, 
     if current_phase not in catalog_phases:
         raise ValidationError(f"Unknown current phase: {current_phase}")
 
-    allowed_statuses = status.get("allowed_statuses")
-    if not isinstance(allowed_statuses, list) or not allowed_statuses:
-        raise ValidationError("allowed_statuses must be a non-empty list")
-    allowed_status_set = set(allowed_statuses)
-    if program.get("status") not in allowed_status_set:
-        raise ValidationError(f"Invalid program status: {program.get('status')}")
+    allowed_statuses = set(require_unique_string_list(status.get("allowed_statuses"), "allowed_statuses"))
+    gate_states = set(require_unique_string_list(status.get("gate_states"), "gate_states"))
+    required_gates = require_unique_string_list(status.get("required_gates"), "required_gates")
+    pre_merge_gates = require_unique_string_list(status.get("pre_merge_gates"), "pre_merge_gates")
+    post_merge_gates = require_unique_string_list(status.get("post_merge_gates"), "post_merge_gates")
 
-    required_gates = status.get("required_gates")
-    if not isinstance(required_gates, list) or not required_gates:
-        raise ValidationError("required_gates must be a non-empty list")
-    if len(required_gates) != len(set(required_gates)):
-        raise ValidationError("required_gates contains duplicates")
+    if set(pre_merge_gates) & set(post_merge_gates):
+        raise ValidationError("pre_merge_gates and post_merge_gates must not overlap")
+    if set(pre_merge_gates) | set(post_merge_gates) != set(required_gates):
+        raise ValidationError("Pre/post merge gate groups must cover required_gates exactly")
+
+    program_status = program.get("status")
+    if program_status not in allowed_statuses:
+        raise ValidationError(f"Invalid program status: {program_status}")
+    if not isinstance(program.get("merge_authorized"), bool):
+        raise ValidationError("program.merge_authorized must be boolean")
 
     phase_statuses = status.get("phases")
     if not isinstance(phase_statuses, dict):
@@ -176,14 +189,14 @@ def validate_status(status: dict[str, Any], catalog_phases: dict[str, dict[str, 
     if list(phase_statuses) != EXPECTED_PHASE_IDS:
         raise ValidationError("PHASE_STATUS.yaml must list P00 through P15 in order")
 
-    active = []
+    active: list[str] = []
     for phase_id, phase_status in phase_statuses.items():
         if not isinstance(phase_status, dict):
             raise ValidationError(f"Status for {phase_id} must be a mapping")
         value = phase_status.get("status")
-        if value not in allowed_status_set:
+        if value not in allowed_statuses:
             raise ValidationError(f"Invalid status for {phase_id}: {value}")
-        if value not in {"planned", "complete", "cancelled"}:
+        if value not in TERMINAL_PHASE_STATUSES:
             active.append(phase_id)
 
     limit = program.get("default_active_phase_limit")
@@ -195,20 +208,81 @@ def validate_status(status: dict[str, Any], catalog_phases: dict[str, dict[str, 
         raise ValidationError("current_phase must be the active phase")
 
     current = phase_statuses[current_phase]
+    if current.get("status") != program_status:
+        raise ValidationError("Program status must match the current phase status")
     if current.get("branch") != catalog_phases[current_phase]["branch"]:
         raise ValidationError("Current phase branch does not match the phase catalog")
+    if current.get("risk") != catalog_phases[current_phase]["risk"]:
+        raise ValidationError("Current phase risk does not match the phase catalog")
+    if current.get("required_independent_reviews") != catalog_phases[current_phase][
+        "required_independent_reviews"
+    ]:
+        raise ValidationError("Current phase review count does not match the phase catalog")
+    if not isinstance(current.get("merge_authorized"), bool):
+        raise ValidationError("Current phase merge_authorized must be boolean")
+    if bool(program["merge_authorized"]) != bool(current["merge_authorized"]):
+        raise ValidationError("Program and current-phase merge_authorized values disagree")
+    if not isinstance(current.get("owner_release_approved"), bool):
+        raise ValidationError("Current phase owner_release_approved must be boolean")
 
     gates = current.get("gates")
     if not isinstance(gates, dict):
         raise ValidationError("Current phase must define a gates mapping")
     missing_gates = [gate for gate in required_gates if gate not in gates]
+    extra_gates = [gate for gate in gates if gate not in required_gates]
     if missing_gates:
         raise ValidationError("Current phase is missing gates: " + ", ".join(missing_gates))
-    if not all(isinstance(gates[gate], bool) for gate in required_gates):
-        raise ValidationError("Every current-phase gate must be boolean")
+    if extra_gates:
+        raise ValidationError("Current phase has unknown gates: " + ", ".join(extra_gates))
+    invalid_gate_states = {
+        gate: value for gate, value in gates.items() if value not in gate_states
+    }
+    if invalid_gate_states:
+        raise ValidationError(f"Invalid gate states: {invalid_gate_states}")
 
-    if bool(program.get("merge_authorized")) != bool(gates.get("merge_authorized")):
-        raise ValidationError("Program and current-phase merge_authorized values disagree")
+    exceptions = current.get("gate_exceptions", {})
+    if not isinstance(exceptions, dict):
+        raise ValidationError("gate_exceptions must be a mapping")
+    for gate, state in gates.items():
+        if state == "not_applicable":
+            reason = exceptions.get(gate)
+            if not isinstance(reason, str) or not reason.strip():
+                raise ValidationError(f"Gate {gate} is not_applicable without a reason")
+    for gate in exceptions:
+        if gate not in gates:
+            raise ValidationError(f"gate_exceptions references unknown gate {gate}")
+
+    if current_phase == "P00":
+        bootstrap = current.get("bootstrap_exception")
+        if not isinstance(bootstrap, dict) or bootstrap.get("active") is not True:
+            raise ValidationError("P00 must document its one-time bootstrap exception")
+        if bootstrap.get("future_phases_permitted") is not False:
+            raise ValidationError("The P00 bootstrap exception must be prohibited for future phases")
+    elif current.get("bootstrap_exception"):
+        raise ValidationError("Only P00 may use a bootstrap exception")
+
+    if current["status"] == "ready_to_merge":
+        unsatisfied = [
+            gate for gate in pre_merge_gates if gates[gate] not in SATISFIED_GATE_STATES
+        ]
+        if unsatisfied:
+            raise ValidationError(f"ready_to_merge has unsatisfied gates: {unsatisfied}")
+        if not current["merge_authorized"]:
+            raise ValidationError("ready_to_merge requires merge authorization")
+        if current["risk"] == "CRITICAL" and not current["owner_release_approved"]:
+            raise ValidationError("CRITICAL ready_to_merge requires owner release approval")
+
+    if current["status"] == "post_merge_verify" and gates["squash_merged"] != "passed":
+        raise ValidationError("post_merge_verify requires squash_merged=passed")
+
+    if current["status"] == "complete":
+        unsatisfied = [
+            gate for gate in required_gates if gates[gate] not in SATISFIED_GATE_STATES
+        ]
+        if unsatisfied:
+            raise ValidationError(f"complete phase has unsatisfied gates: {unsatisfied}")
+        if not current["merge_authorized"]:
+            raise ValidationError("complete phase requires merge authorization")
 
     current_index = EXPECTED_PHASE_IDS.index(current_phase)
     for dependency in catalog_phases[current_phase]["dependencies"]:
