@@ -119,9 +119,9 @@ For every phase:
 9. inspect actual CI logs, fix root causes, add regression tests, and rerun the full applicable gate before every review-fix push;
 10. resolve every review thread;
 11. require successful Python 3.11 and Python 3.13 CI, build-control validation, and applicable Docker/database/security/eval checks;
-12. require the review count and staging/rollback evidence defined by the phase risk;
+12. require the review count and all applicable staging/rollback evidence defined by the phase risk; any `not_applicable` gate must have a factual recorded rationale;
 13. squash merge only after explicit authorization;
-14. verify `main` CI and the deployed revision after merge before marking the phase complete.
+14. verify `main` CI and every applicable deployed revision after merge before marking the phase complete; record a factual `not_applicable` reason for a non-runtime phase.
 
 ### Review requirements
 
