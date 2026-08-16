@@ -39,13 +39,14 @@ Never push a knowingly broken checkpoint and never use `--no-verify` to bypass a
 ## Merge
 
 - Squash merge only.
-- Merge only after CI, required reviews, staging smoke, rollback, and authorization are green.
+- Merge only after all applicable CI, review, staging, rollback, and authorization gates are green.
+- A gate may be `not_applicable` only when `PHASE_STATUS.yaml` records a factual reason; `not_applicable` is never a bypass for an applicable check.
 - A target date is not merge authorization.
 - HIGH production releases and every CRITICAL phase require explicit owner release approval.
-- After merge, verify `main` CI and the deployed environment before declaring complete.
+- After merge, verify `main` CI and every applicable deployed environment; record a factual `not_applicable` reason for a non-runtime phase.
 
 ## Reporting
 
-Every completion report must include phase, branch, commits, PR, changed files, migrations, tests/evals, pre-push review, CI, code review, staging, security, blockers, rollback, deployed SHA, and next action.
+Every completion report must include phase, branch, commits, PR, changed files, migrations, tests/evals, pre-push review, CI, code review, applicable staging evidence or `not_applicable` rationale, security, blockers, rollback, deployed SHA when applicable, and next action.
 
-Never claim `COMPLETE` without post-merge verification.
+Never claim `COMPLETE` without all applicable post-merge verification.
