@@ -2,7 +2,6 @@
 name: Phase implementation
 about: Track one controlled implementation phase
 title: "PXX — "
-labels: ["phase"]
 assignees: []
 ---
 
@@ -12,7 +11,7 @@ assignees: []
 - Target window:
 - Branch:
 - Risk:
-- Required reviews:
+- Required independent reviews:
 - Dependencies:
 - Merge authorized: `false`
 - Owner release approved: `false`
@@ -31,21 +30,21 @@ assignees: []
 
 ## Clarification gates
 
-- [ ] Credentials available through approved secret path.
-- [ ] External account/API/mailbox type verified.
-- [ ] Business thresholds and policies verified.
-- [ ] Backup and rollback defined for destructive changes.
+- [ ] Credentials available through approved secret path, or explicitly not required.
+- [ ] External account/API/mailbox type verified, or explicitly not required.
+- [ ] Business thresholds and policies verified, or explicitly not required.
+- [ ] Backup and rollback defined for destructive changes, or destructive change is not applicable.
 
 ## Kickoff
 
-- [ ] AGENTS.md read.
-- [ ] Master plan/protocol/phase file read.
+- [ ] `AGENTS.md` read.
+- [ ] Master schedule, execution protocol, status, and current phase contract read.
 - [ ] Dependencies complete.
-- [ ] Main synced.
+- [ ] `main` synced.
 - [ ] Clean worktree.
 - [ ] Base SHA recorded.
 - [ ] Exact branch created.
-- [ ] Phase contract written.
+- [ ] Phase contract verified.
 
 ## Implementation
 
@@ -57,7 +56,7 @@ assignees: []
 
 ## Pre-push review
 
-- [ ] Full required local gate green.
+- [ ] Full required local gate green, or a one-time documented bootstrap exception applies.
 - [ ] Debugging complete.
 - [ ] Complete diff reviewed.
 - [ ] Secret/PII scan clean.
@@ -71,21 +70,22 @@ assignees: []
 - [ ] Draft PR opened.
 - [ ] PR template complete.
 - [ ] CI green.
-- [ ] Automated Codex review complete.
+- [ ] Automated Codex review complete when configured.
 - [ ] Security review complete when required.
-- [ ] Required human approvals complete.
+- [ ] Required independent human approvals complete.
+- [ ] PR author not counted as independent reviewer.
 - [ ] All conversations resolved.
 - [ ] Full gate rerun after fixes.
 
 ## Staging and merge
 
-- [ ] Exact commit deployed to staging.
-- [ ] Staging smoke green.
+- [ ] Exact commit deployed to staging, or `N/A` is recorded with rationale.
+- [ ] Staging smoke green, or `N/A` is recorded with rationale.
 - [ ] Rollback verified.
 - [ ] Merge authorization recorded.
 - [ ] Squash merged.
-- [ ] Main CI green.
-- [ ] Post-merge staging green.
+- [ ] `main` CI green.
+- [ ] Post-merge staging green, or `N/A` is recorded with rationale.
 
 ## Completion evidence
 
@@ -94,7 +94,8 @@ assignees: []
 - PR:
 - CI:
 - Reviews:
-- Staging:
+- Staging or N/A rationale:
+- Rollback:
 - Merge:
 - Completion report:
 
