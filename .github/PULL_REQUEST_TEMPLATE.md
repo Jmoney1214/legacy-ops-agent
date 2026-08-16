@@ -45,7 +45,7 @@ What single phase outcome does this PR deliver?
 ## Pre-push gate
 
 - [ ] Targeted tests pass.
-- [ ] Full required local verification passes, or a one-time bootstrap exception is documented and prohibited from future phases.
+- [ ] Full required local verification passes, or the P00-only bootstrap exception is documented in `PHASE_STATUS.yaml` and prohibited from future phases.
 - [ ] Debugging is complete.
 - [ ] Complete diff reviewed line by line.
 - [ ] `git diff --check` clean.
