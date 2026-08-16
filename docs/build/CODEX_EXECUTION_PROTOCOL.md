@@ -58,6 +58,8 @@ No branch push is permitted until every applicable gate is green:
 
 A branch checkpoint may be incomplete. It may not be knowingly broken. Never use `--no-verify` to bypass a gate.
 
+A gate may be marked `not_applicable` only when `PHASE_STATUS.yaml` records a factual reason showing that the phase does not alter the relevant runtime, data, permission, or external system. `not_applicable` is not a bypass for an applicable check.
+
 ## Pull-request pipeline
 
 ```text
@@ -70,10 +72,10 @@ local implementation
 -> independent review
 -> fix + regression test + full gate
 -> resolve every review thread
--> staging verification
+-> applicable staging verification
 -> merge authorization
 -> squash merge
--> main CI and deployed verification
+-> main CI and applicable deployed verification
 ```
 
 - One phase branch and one PR at a time by default.
@@ -97,10 +99,11 @@ Use **squash merge only**.
 A PR is `READY_TO_MERGE` only when:
 
 - branch is current and mergeable;
-- all required checks are successful, not pending, skipped, neutral, or failing;
+- all applicable required checks are successful, not pending, skipped, neutral, or failing;
+- every `not_applicable` gate has a factual recorded rationale;
 - required review count is met;
 - all review threads are resolved;
-- exact PR commit passed staging smoke tests;
+- the exact PR commit passed applicable staging smoke tests, or a non-runtime phase records staging as `not_applicable` with a factual rationale;
 - migration and rollback evidence is complete when applicable;
 - no unresolved security, privacy, integrity, or compliance finding exists;
 - `merge_authorized: true` is recorded in the phase status or issue;
@@ -112,13 +115,13 @@ Never merge because a target date arrived. Never self-approve as a substitute fo
 
 1. Fetch the actual merge result and record the merge SHA.
 2. Verify `main` CI.
-3. Verify the deployed environment points to the merged SHA.
-4. Run phase-specific smoke tests.
+3. Verify the deployed environment points to the merged SHA when the phase changes deployed behavior; otherwise record `not_applicable` with rationale.
+4. Run phase-specific deployed smoke tests when applicable; otherwise record `not_applicable` with rationale.
 5. Verify migrations, queues, web readiness, worker heartbeat, and maintenance heartbeat as applicable.
-6. Review logs and traces for errors, leaks, silent fallback, excessive retries, and duplicate effects.
+6. Review logs and traces for errors, leaks, silent fallback, excessive retries, and duplicate effects when runtime behavior changed.
 7. Confirm rollback remains available.
 8. Update the phase issue and `PHASE_STATUS.yaml` with evidence.
-9. Mark the phase `complete` only after all post-merge checks pass.
+9. Mark the phase `complete` only after all applicable post-merge checks pass.
 10. Do not begin the next phase before closeout.
 
 ## Stop-and-clarify conditions
@@ -127,4 +130,4 @@ Stop before any destructive or irreversible command, paid action, new production
 
 ## Required completion report
 
-Every phase report must include objective, planned and actual dates, scope delivered, deferred work, changed files, migrations and rollback, permissions, exact tests and results, debugging performed, review findings and resolutions, staging evidence, PR, merge SHA, deployed SHA, post-merge verification, limitations, open blockers, and next-phase dependency status.
+Every phase report must include objective, planned and actual dates, scope delivered, deferred work, changed files, migrations and rollback, permissions, exact tests and results, debugging performed, review findings and resolutions, applicable staging evidence or recorded `not_applicable` reasons, PR, merge SHA, deployed SHA when applicable, post-merge verification, limitations, open blockers, and next-phase dependency status.
