@@ -50,11 +50,11 @@ BASELINE
 -> INDEPENDENT REVIEW
 -> FIX + REGRESSION TEST + FULL GATE
 -> RESOLVE THREADS
--> STAGING
+-> APPLICABLE STAGING
 -> MERGE AUTHORIZATION
 -> SQUASH MERGE
 -> MAIN CI
--> POST-MERGE DEPLOYED VERIFICATION
+-> APPLICABLE POST-MERGE DEPLOYED VERIFICATION
 -> COMPLETION REPORT
 ```
 
@@ -71,7 +71,7 @@ Do not push until every applicable local gate in `CODEX_EXECUTION_PROTOCOL.md` p
 - The PR author cannot count as the independent reviewer.
 - Resolve every review thread and rerun the applicable full gate after fixes.
 
-Do not merge around failed, pending, skipped, or neutral required CI; unresolved review threads; unknown migration impact; untested rollback; security findings; missing staging evidence; or missing authorization.
+Do not merge around failed, pending, skipped, or neutral applicable CI; unresolved review threads; unknown migration impact; untested rollback; security findings; missing applicable staging evidence; an unjustified `not_applicable` state; or missing authorization.
 
 ## Merge hard rule
 
@@ -81,7 +81,7 @@ Use squash merge only. You may merge only when both the program/current-phase st
 merge_authorized: true
 ```
 
-and every required gate is green. HIGH production releases and every CRITICAL phase also require explicit owner release approval. Otherwise report `READY_TO_MERGE` or `BLOCKED` and stop.
+and every applicable required gate is `passed` or has a factual recorded `not_applicable` rationale. HIGH production releases and every CRITICAL phase also require explicit owner release approval. Otherwise report `READY_TO_MERGE` or `BLOCKED` and stop.
 
 ## Stop and ask the owner
 
@@ -105,11 +105,11 @@ TESTS AND EVALS
 LOCAL PRE-PUSH REVIEW
 CI STATUS
 CODE REVIEW STATUS
-STAGING STATUS
+STAGING STATUS OR N/A RATIONALE
 SECURITY STATUS
 OPEN BLOCKERS
 ROLLBACK
 NEXT ACTION
 ```
 
-Never report `COMPLETE` until the PR is merged and post-merge `main` and deployed verification are green.
+Never report `COMPLETE` until the PR is merged, `main` CI is green, and every applicable deployed verification passes; a non-runtime phase must record why a deployed check is `not_applicable`.
