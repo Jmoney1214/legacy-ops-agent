@@ -49,11 +49,11 @@ GitHub stores code, migrations, agent artifacts, tests, evaluations, reviews, an
 3. **Never push directly to `main`.**
 4. **Never push a known-broken checkpoint.**
 5. **Run debugging and the complete required pre-push gate before the first push and after every review fix.**
-6. **Do not merge with a failing, pending, skipped, or unresolved required gate.**
+6. **Do not merge with a failing, pending, skipped, or unresolved applicable gate.**
 7. **All remote Supabase changes must originate from versioned migrations.**
 8. **Deterministic code owns money, dates, matching, authorization, idempotency, state transitions, policy, and side effects.**
 9. **Agents analyze, classify, recommend, explain, and draft; they do not self-approve or silently execute material actions.**
-10. **No phase is complete until post-merge `main` CI and deployed verification pass.**
+10. **No phase is complete until post-merge `main` CI and every applicable deployed verification pass; an inapplicable gate requires a factual recorded rationale.**
 11. **Do not start the next phase while the current phase has an unresolved blocker or incomplete closeout.**
 12. **Scope growth belongs in a new issue or later phase, not the active PR.**
 
@@ -137,7 +137,7 @@ Blocking states are explicit: clarification, credential, external administration
 
 ## Merge authorization
 
-A PR may be squash-merged only when all required checks, reviews, review-thread resolution, staging verification, rollback confirmation, and recorded merge authorization are green. HIGH production releases and every CRITICAL phase also require explicit owner release approval.
+A PR may be squash-merged only when all applicable checks, reviews, review-thread resolution, staging verification or a factual `not_applicable` rationale, rollback confirmation, and recorded merge authorization are green. A `not_applicable` record is not a bypass for an applicable check. HIGH production releases and every CRITICAL phase also require explicit owner release approval.
 
 ## No-overcoding rule
 
