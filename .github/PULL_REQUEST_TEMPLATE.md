@@ -45,7 +45,7 @@ What single phase outcome does this PR deliver?
 ## Pre-push gate
 
 - [ ] Targeted tests pass.
-- [ ] Full required local verification passes.
+- [ ] Full required local verification passes, or a one-time bootstrap exception is documented and prohibited from future phases.
 - [ ] Debugging is complete.
 - [ ] Complete diff reviewed line by line.
 - [ ] `git diff --check` clean.
@@ -55,6 +55,8 @@ What single phase outcome does this PR deliver?
 - [ ] No known required check was red when pushed.
 
 ## Verification
+
+Use `PASS`, `FAIL`, `PENDING`, `BLOCKED`, or `N/A — <reason>`.
 
 | Gate | Result | Evidence |
 |---|---|---|
@@ -75,7 +77,8 @@ What single phase outcome does this PR deliver?
 
 - [ ] Automated Codex review requested when configured.
 - [ ] Security-focused review requested for HIGH/CRITICAL.
-- [ ] Required human approvals received.
+- [ ] Required independent human approvals received.
+- [ ] The PR author is not counted as the independent reviewer.
 - [ ] All conversations resolved.
 - [ ] Full required verification rerun after review fixes.
 
@@ -91,8 +94,8 @@ What single phase outcome does this PR deliver?
 
 ## Staging
 
-- Deployment:
-- Smoke evidence:
+- Deployment, or `N/A` with rationale:
+- Smoke evidence, or `N/A` with rationale:
 - Monitoring:
 - Rollback point:
 
@@ -104,10 +107,10 @@ What single phase outcome does this PR deliver?
 
 - [ ] PR is no longer draft.
 - [ ] Branch is current and mergeable.
-- [ ] All required checks are green.
+- [ ] All applicable required checks are green; every `N/A` has a recorded rationale.
 - [ ] Required approvals are present.
 - [ ] All threads are resolved.
-- [ ] Staging verified.
+- [ ] Staging verified, or explicitly `N/A` with rationale for a non-runtime phase.
 - [ ] Rollback verified.
 - [ ] Merge authorization recorded.
 - [ ] Owner release approval recorded when required.
