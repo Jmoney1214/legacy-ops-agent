@@ -45,3 +45,24 @@ jobs:
         run: exit 1
       - name: Compile source
         run: python -m compileall -q legacy_ops browser_automation
+
+  build-control:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install build-control dependency
+        run: python -m pip install --upgrade pip && pip install "PyYAML>=6.0.2,<7"
+      - name: Compile validator
+        run: python -m py_compile scripts/validate_build_control_pack.py
+      - name: Validate build-control artifacts
+        run: python scripts/validate_build_control_pack.py
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application image
+        run: docker build --tag legacy-ops-agent:ci .
