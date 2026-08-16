@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Phase | P00 — Program control and repository baseline |
-| Status | `PR_DRAFT` |
+| Status | `CI_REVIEW` |
 | Repository | `Jmoney1214/legacy-ops-agent` |
 | Base commit | `f096b1d533897b6c4d3b4e5c7e37d947b3a5cd40` |
 | Branch | `phase/00-program-control` |
@@ -28,28 +28,34 @@
 - [x] Live phase-status file installed.
 - [x] Codex execution, review, and merge protocol installed.
 - [x] Root agent rules corrected for a full functional-head architecture and separate three-person strategic council.
-- [x] Automated build-control validator added.
+- [x] Automated build-control validator and regression tests added.
 - [x] CI expanded to validate the control pack and build the Docker image.
+- [x] Python 3.11 unit tests and source compilation passed at reviewed head `1d9b8fd6421cfb512eec37cb2eb1593fb9223685`.
+- [x] Python 3.13 unit tests and source compilation passed at the same head.
+- [x] Build-control validation passed at the same head.
+- [x] Docker image build passed at the same head.
+- [x] Complete PR diff and architecture/scope review recorded in `reports/P00_REVIEW_REPORT.md`.
+- [x] Secret, credential, customer-data, payment-data, private-mail, and production-evidence review recorded clean.
+- [x] P00 rollback defined as a squash-merge revert; no data or external side effect exists.
 
 ### Open gates
 
-- [ ] Latest Python 3.11 and 3.13 CI pass.
-- [ ] Build-control validation job passes.
-- [ ] Docker-build job passes.
-- [ ] Complete final PR diff review.
-- [ ] Automated review requested when configured.
+- [ ] Final exact-head CI after the status and board evidence commits.
+- [ ] Automated Codex review requested and completed when configured.
 - [ ] One independent human approval.
 - [ ] Every review thread resolved.
 - [ ] Merge authorization recorded.
+- [ ] PR marked ready for review.
 - [ ] Squash merge.
-- [ ] Post-merge `main` CI and deployed verification.
+- [ ] Post-merge `main` CI.
+- [ ] Deployed-runtime verification: `N/A` for P00 because runtime, data, permissions, and deployment configuration are unchanged.
 - [ ] P00 completion report and issue closeout.
 
 ## Phase portfolio
 
 | Phase | Status | Target window |
 |---|---|---|
-| P00 Program control and repository baseline | PR_DRAFT | Aug 17–19 |
+| P00 Program control and repository baseline | CI_REVIEW | Aug 17–19 |
 | P01 Supabase security and command center | PLANNED | Aug 20–Sep 2 |
 | P02 Runtime split | PLANNED | Sep 3–11 |
 | P03 Tools and evidence | PLANNED | Sep 14–23 |
@@ -75,4 +81,4 @@
 
 ## Update rule
 
-The machine-readable authority is `docs/build/PHASE_STATUS.yaml`. This board is updated after every meaningful phase transition, CI result, review outcome, merge, or post-merge verification. A phase is complete only after post-merge verification is green.
+The machine-readable authority is `docs/build/PHASE_STATUS.yaml`. This board is updated after every meaningful phase transition, CI result, review outcome, merge, or post-merge verification. A phase is complete only after `main` CI and every applicable deployed verification pass; a non-runtime gate may be `N/A` only with a factual recorded reason.
