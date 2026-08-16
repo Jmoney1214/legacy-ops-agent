@@ -1,9 +1,9 @@
-schema_version: "1.0"
+schema_version: "1.1"
 program:
   id: legacy-wine-liquor-agentic-business-os
   repository: Jmoney1214/legacy-ops-agent
   current_phase: P00
-  status: pr_draft
+  status: ci_review
   program_start: "2026-08-16"
   target_limited_production_launch: "2026-12-18"
   merge_method: squash
@@ -31,6 +31,37 @@ allowed_statuses:
   - blocked_staging
   - cancelled
 
+gate_states:
+  - pending
+  - passed
+  - failed
+  - blocked
+  - not_applicable
+
+pre_merge_gates:
+  - phase_contract
+  - implementation
+  - targeted_tests
+  - full_local_verification
+  - debugging_complete
+  - pre_push_diff_review
+  - secret_pii_scan
+  - branch_pushed
+  - pull_request_open
+  - ci_green
+  - automated_review_complete
+  - human_reviews_complete
+  - review_threads_resolved
+  - staging_deployed
+  - staging_smoke_green
+  - rollback_verified
+
+post_merge_gates:
+  - squash_merged
+  - main_ci_green
+  - post_merge_staging_green
+  - completion_report
+
 required_gates:
   - phase_contract
   - implementation
@@ -48,7 +79,6 @@ required_gates:
   - staging_deployed
   - staging_smoke_green
   - rollback_verified
-  - merge_authorized
   - squash_merged
   - main_ci_green
   - post_merge_staging_green
@@ -56,7 +86,7 @@ required_gates:
 
 phases:
   P00:
-    status: pr_draft
+    status: ci_review
     planned_start: "2026-08-17"
     planned_end: "2026-08-19"
     actual_start: "2026-08-16"
@@ -66,31 +96,42 @@ phases:
     pull_request_url: https://github.com/Jmoney1214/legacy-ops-agent/pull/7
     risk: STANDARD
     required_independent_reviews: 1
+    merge_authorized: false
     owner_release_approved: false
+    bootstrap_exception:
+      active: true
+      scope: P00 only
+      future_phases_permitted: false
+      reason: P00 was bootstrapped through the GitHub connector before the repository control protocol existed; the phase changes governance, documentation, validation, and CI only, and the exact branch head is validated by GitHub CI.
     blockers:
-      - Full P00 control set, final CI, complete diff review, and independent review remain open.
+      - Final complete-diff review, automated review, one independent human approval, review-thread resolution, and merge authorization remain open.
+    gate_exceptions:
+      full_local_verification: The P00 bootstrap used GitHub API writes before the local-first protocol existed; the exact complete branch is validated by Python 3.11/3.13 CI, build-control validation, and Docker build. No future phase may reuse this exception.
+      staging_deployed: P00 changes repository governance and CI only; no application runtime, database, permission, or deployment configuration changes require a staging deployment.
+      staging_smoke_green: No deployed application behavior changes in P00; CI and Docker build are the applicable execution checks.
+      post_merge_staging_green: P00 does not change deployed application behavior; post-merge main CI is the applicable verification.
+    rollback_evidence: A squash-merge revert removes the P00 governance and CI changes without a data migration or external side effect.
     gates:
-      phase_contract: true
-      implementation: false
-      targeted_tests: true
-      full_local_verification: false
-      debugging_complete: false
-      pre_push_diff_review: false
-      secret_pii_scan: true
-      branch_pushed: true
-      pull_request_open: true
-      ci_green: false
-      automated_review_complete: false
-      human_reviews_complete: false
-      review_threads_resolved: false
-      staging_deployed: false
-      staging_smoke_green: false
-      rollback_verified: true
-      merge_authorized: false
-      squash_merged: false
-      main_ci_green: false
-      post_merge_staging_green: false
-      completion_report: false
+      phase_contract: passed
+      implementation: passed
+      targeted_tests: passed
+      full_local_verification: not_applicable
+      debugging_complete: passed
+      pre_push_diff_review: pending
+      secret_pii_scan: pending
+      branch_pushed: passed
+      pull_request_open: passed
+      ci_green: passed
+      automated_review_complete: pending
+      human_reviews_complete: pending
+      review_threads_resolved: pending
+      staging_deployed: not_applicable
+      staging_smoke_green: not_applicable
+      rollback_verified: passed
+      squash_merged: pending
+      main_ci_green: pending
+      post_merge_staging_green: not_applicable
+      completion_report: pending
 
   P01: {status: planned}
   P02: {status: planned}
