@@ -56,7 +56,7 @@ assignees: []
 
 ## Pre-push review
 
-- [ ] Full required local gate green, or a one-time documented bootstrap exception applies.
+- [ ] Full required local gate green, or the P00-only bootstrap exception is documented in `PHASE_STATUS.yaml`; future phases may not use it.
 - [ ] Debugging complete.
 - [ ] Complete diff reviewed.
 - [ ] Secret/PII scan clean.
